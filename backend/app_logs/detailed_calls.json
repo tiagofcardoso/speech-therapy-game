@@ -1,0 +1,34 @@
+{"timestamp": "2025-04-03T10:56:35.796833", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T10:56:35.815220", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T10:56:58.246577", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T10:56:58.262972", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:01:35.894494", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:01:35.913856", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:04:27.988802", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:04:28.004918", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:04:34.168514", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:04:34.185583", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:27:56.490129", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:27:56.513627", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:27:59.737002", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:27:59.755276", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:28:26.272035", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:28:26.288404", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:28:36.526051", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:28:36.548110", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:29:53.241000", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:29:53.257366", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:30:04.562615", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-03T15:30:04.586038", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-04T07:52:37.315852", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T07:52:37.345108", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-04T07:52:39.978050", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T07:52:40.008400", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "success", "model": "gpt-3.5-turbo"}, "error": null, "success": true}
+{"timestamp": "2025-04-04T17:27:16.916684", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T17:27:16.917174", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "error"}, "error": "Client.__init__() got an unexpected keyword argument 'proxies'", "success": false}
+{"timestamp": "2025-04-04T17:29:26.716276", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T17:29:26.716801", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "error"}, "error": "Client.__init__() got an unexpected keyword argument 'proxies'", "success": false}
+{"timestamp": "2025-04-04T17:31:04.096721", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T17:31:04.097166", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "error"}, "error": "Client.__init__() got an unexpected keyword argument 'proxies'", "success": false}
+{"timestamp": "2025-04-04T17:31:04.548840", "agent": "GameDesignerAgent", "method": "__init__", "input": {"event": "Inicializando agente"}, "output": null, "error": null, "success": true}
+{"timestamp": "2025-04-04T17:31:04.549198", "agent": "GameDesignerAgent", "method": "__init__", "input": null, "output": {"status": "error"}, "error": "Client.__init__() got an unexpected keyword argument 'proxies'", "success": false}
