@@ -1,0 +1,353 @@
+.game-screen {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+}
+
+.game-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.back-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: #f8f9fa;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-right: 20px;
+}
+
+.back-button:hover {
+    background-color: #e9ecef;
+}
+
+.game-header h1 {
+    color: #007bff;
+    margin: 0;
+    flex-grow: 1;
+    text-align: center;
+}
+
+.instructions-container {
+    background-color: #f8f9fa;
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.instructions-content h2 {
+    color: #212529;
+    margin-bottom: 15px;
+}
+
+.instructions-content p {
+    color: #495057;
+    font-size: 18px;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.encouragement {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.start-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-top: 20px;
+}
+
+.start-button:hover {
+    background-color: #0069d9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.game-content {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.exercise-card {
+    background-color: white;
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.word-container {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.target-word {
+    font-size: 42px;
+    color: #007bff;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.word-prompt {
+    font-size: 18px;
+    color: #495057;
+}
+
+.visual-cue {
+    width: 200px;
+    height: 200px;
+    margin-bottom: 20px;
+}
+
+.image-placeholder {
+    width: 100%;
+    height: 100%;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    text-align: center;
+    padding: 10px;
+}
+
+.hint-container {
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.hint {
+    color: #6c757d;
+    font-size: 16px;
+    text-align: center;
+    font-style: italic;
+}
+
+.feedback-container {
+    margin-top: 20px;
+    animation: slideUp 0.3s ease-in-out;
+}
+
+.feedback-content {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    border-left: 5px solid #28a745;
+}
+
+.feedback-praise {
+    color: #28a745;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.feedback-correction {
+    color: #dc3545;
+    margin-bottom: 10px;
+}
+
+.feedback-tip {
+    color: #007bff;
+    font-style: italic;
+}
+
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+}
+
+.loading-spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #007bff;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+.game-error {
+    text-align: center;
+    padding: 40px 20px;
+    background-color: #f8f9fa;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.game-error h2 {
+    color: #dc3545;
+    margin-bottom: 15px;
+}
+
+.game-error p {
+    color: #6c757d;
+    margin-bottom: 25px;
+}
+
+.game-complete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 500px;
+}
+
+.game-complete-content {
+    background-color: #f8f9fa;
+    border-radius: 15px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 100%;
+}
+
+.game-complete-content h2 {
+    color: #28a745;
+    margin-bottom: 20px;
+    font-size: 32px;
+}
+
+.final-score-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 25px;
+}
+
+.final-score-circle {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background-color: #007bff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.feedback {
+    margin-bottom: 30px;
+}
+
+.praise {
+    color: #28a745;
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.encouragement {
+    color: #007bff;
+    font-size: 18px;
+}
+
+.game-complete-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.primary-button,
+.secondary-button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.primary-button {
+    background-color: #007bff;
+    color: white;
+}
+
+.primary-button:hover {
+    background-color: #0069d9;
+}
+
+.secondary-button {
+    background-color: #6c757d;
+    color: white;
+}
+
+.secondary-button:hover {
+    background-color: #5a6268;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    .game-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .back-button {
+        margin-right: 0;
+    }
+
+    .game-header h1 {
+        margin-bottom: 10px;
+    }
+
+    .game-complete-buttons {
+        flex-direction: column;
+    }
+}

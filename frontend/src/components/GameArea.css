@@ -1,0 +1,203 @@
+.game-area {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+}
+
+.instructions {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.instructions h2 {
+    color: #4a4a4a;
+    margin-bottom: 10px;
+}
+
+.encouragement {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.exercise-card {
+    background-color: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.visual-cue {
+    width: 200px;
+    height: 200px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-placeholder {
+    width: 100%;
+    height: 100%;
+    background-color: #f0f0f0;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 14px;
+    text-align: center;
+    padding: 10px;
+}
+
+.word-area {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.target-word {
+    font-size: 36px;
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+.prompt {
+    font-size: 18px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.hint {
+    font-size: 16px;
+    color: #6c757d;
+}
+
+.speech-controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 50px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.status-message {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.status-message.recording {
+    color: #dc3545;
+    font-weight: bold;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.feedback-area {
+    margin-top: 30px;
+}
+
+.feedback-card {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    border-left: 5px solid #28a745;
+}
+
+.praise {
+    color: #28a745;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.correction {
+    color: #dc3545;
+    margin-bottom: 10px;
+}
+
+.tip {
+    color: #007bff;
+    font-style: italic;
+}
+
+.game-complete {
+    text-align: center;
+    padding: 40px 20px;
+    background-color: #f8f9fa;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.final-score {
+    margin: 30px 0;
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 300px;
+    font-size: 18px;
+    color: #6c757d;
+}

@@ -1,0 +1,127 @@
+-generator.html
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Áudio para Testes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin: 10px 0;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gerador de Áudio para Testes</h1>
+    <p>Esta ferramenta gera áudio usando a API de Síntese de Voz do navegador.</p>
+    
+    <div>
+        <label for="text">Texto para sintetizar:</label>
+        <textarea id="text">Rato</textarea>
+    </div>
+    
+    <div>
+        <button id="generate">Gerar Áudio</button>
+        <button id="play">Reproduzir</button>
+    </div>
+    
+    <div class="result" id="result" style="display: none;">
+        <h3>Resultado:</h3>
+        <p id="status"></p>
+        <audio id="audio" controls></audio>
+        <p><strong>Use este URL no seu código:</strong></p>
+        <code id="url"></code>
+    </div>
+    
+    <script>
+        document.getElementById('generate').addEventListener('click', () => {
+            const text = document.getElementById('text').value;
+            const status = document.getElementById('status');
+            const result = document.getElementById('result');
+            const audioElement = document.getElementById('audio');
+            const urlDisplay = document.getElementById('url');
+            
+            if (!window.speechSynthesis) {
+                status.textContent = 'Seu navegador não suporta síntese de voz.';
+                result.style.display = 'block';
+                return;
+            }
+            
+            // Create utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'pt-BR';
+            
+            // Use MediaRecorder to capture audio
+            status.textContent = 'Por favor, aguarde enquanto geramos o áudio...';
+            result.style.display = 'block';
+            
+            // For now, just use browser TTS directly
+            window.speechSynthesis.speak(utterance);
+            status.textContent = 'Áudio reproduzido diretamente. Para lipsync, use os valores de tempo abaixo.';
+            
+            // Generate lipsync data based on word length
+            let lipsyncData = [];
+            let currentTime = 0;
+            
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i].toLowerCase();
+                let viseme = 'X';
+                
+                if ('aeiouáàâãéèêíìîóòôõúùû'.includes(char)) {
+                    viseme = 'A';
+                } else if ('bpm'.includes(char)) {
+                    viseme = 'B';
+                } else if ('fv'.includes(char)) {
+                    viseme = 'F';
+                } else if ('tdnszl'.includes(char)) {
+                    viseme = 'D';
+                } else if ('kg'.includes(char)) {
+                    viseme = 'C';
+                }
+                
+                if (viseme !== 'X') {
+                    lipsyncData.push({
+                        start: currentTime,
+                        end: currentTime + 0.2,
+                        value: viseme
+                    });
+                    currentTime += 0.25;
+                }
+            }
+            
+            // Format lipsync data
+            const lipsyncJson = JSON.stringify(lipsyncData, null, 2);
+            urlDisplay.textContent = `Dados de lipsync para "${text}":\n${lipsyncJson}`;
+        });
+        
+        document.getElementById('play').addEventListener('click', () => {
+            const text = document.getElementById('text').value;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'pt-BR';
+            window.speechSynthesis.speak(utterance);
+        });
+    </script>
+</body>
+</html>
