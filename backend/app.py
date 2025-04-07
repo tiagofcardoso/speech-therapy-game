@@ -4,6 +4,7 @@ from speech.recognition import recognize_speech
 from speech.synthesis import synthesize_speech, get_example_word_for_phoneme
 from speech.lipsync import LipsyncGenerator
 from ai.mcp_coordinator import MCPCoordinator
+from ai.game_generator import GameGenerator
 from auth.auth_service import AuthService
 from auth.auth_middleware import token_required
 from database.db_connector import DatabaseConnector
@@ -14,11 +15,12 @@ import datetime
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import logging
-from config import DEBUG, OPENAI_API_KEY  # Importe OPENAI_API_KEY aqui
+from config import DEBUG, OPENAI_API_KEY, app, JWT_SECRET_KEY  # Import app instance and JWT_SECRET_KEY from config
 from bson import ObjectId
 from flask.json import JSONEncoder
 import tempfile
 import base64
+import jwt
 
 # Classe para codificar ObjectIds para JSON
 class CustomJSONEncoder(JSONEncoder):
@@ -37,9 +39,23 @@ if not OPENAI_API_KEY:
     print("   Set this in your .env file.\n")
 
 # Initialize Flask app
-app = Flask(__name__, 
-            static_folder='../frontend/build',
-            static_url_path='/')
+app = Flask(__name__)
+
+# Configure CORS globalmente
+CORS(app, 
+     resources={r"/*": {"origins": "*"}}, 
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
+
+# Configure CORS especificamente para rotas de autenticação
+CORS(app, 
+     resources={r"/api/auth/*": {"origins": "*"}}, 
+     methods=["POST", "OPTIONS"],
+     allow_headers=["Content-Type"])
+
+app.static_folder = '../frontend/build'
+app.static_url_path = '/'
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -48,17 +64,6 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
-
-# Configure CORS para aceitar solicitações de qualquer origem
-CORS(app)
-
-# Adicione o seguinte após a configuração CORS:
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-    return response
 
 # Aplique o encoder personalizado ao Flask app
 app.json_encoder = CustomJSONEncoder
@@ -77,20 +82,42 @@ def home():
 def test_endpoint():
     return jsonify({"success": True, "message": "Backend API is working!"})
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "online",
+        "message": "API está funcionando corretamente"
+    })
+
 # Initialize services
 auth_service = AuthService()
 db = DatabaseConnector()
 
-# Initialize MCPCoordinator with error handling
-try:
-    mcp_coordinator = MCPCoordinator()
-except Exception as e:
-    print(f"Aviso: Falha ao inicializar MCPCoordinator: {e}")
-    print("A aplicação funcionará sem recursos de IA.")
-    mcp_coordinator = None  # Define como None para poder verificar antes de usar
+# Initialize global instances
+game_generator = None
+mcp_coordinator = None
 
-# Initialize the lipsync generator
-lipsync_generator = LipsyncGenerator()
+# You can't use @app.before_first_request in newer Flask versions
+# Use this instead:
+@app.before_request
+def initialize_services():
+    global game_generator, mcp_coordinator
+    
+    # Only initialize if not already initialized
+    if game_generator is None:
+        try:
+            # Initialize game generator
+            game_generator = GameGenerator()
+            
+            # Initialize MCP coordinator 
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            if openai_api_key:
+                mcp_coordinator = MCPCoordinator(db_client=db, openai_api_key=openai_api_key)
+                print("MCPCoordinator initialized successfully")
+            else:
+                print("Warning: OPENAI_API_KEY not found. MCP features will be disabled.")
+        except Exception as e:
+            print(f"Error initializing services: {str(e)}")
 
 # Configure Sentry
 if os.environ.get('SENTRY_DSN'):
@@ -104,46 +131,144 @@ if os.environ.get('SENTRY_DSN'):
 else:
     print("Sentry monitoring disabled (no SENTRY_DSN provided)")
 
-# Authentication routes
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    user_data = {
-        "name": data.get('name', ''),
-        "age": data.get('age', 0)
-    }
+# Adicione esta função antes das rotas de autenticação
+def generate_token(user_id):
+    """
+    Gera um token JWT para o usuário
     
-    result = auth_service.register_user(username, password, user_data)
-    return jsonify(result), 200 if result["success"] else 400
+    Args:
+        user_id: ID do usuário
+        
+    Returns:
+        str: Token JWT
+    """
+    try:
+        # Defina o payload com user_id e timestamps
+        payload = {
+            'user_id': str(user_id),
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1),
+            'iat': datetime.datetime.utcnow()
+        }
+        
+        # Use a chave secreta definida em config.py
+        token = jwt.encode(
+            payload,
+            JWT_SECRET_KEY,  # Use a constante do config.py
+            algorithm='HS256'
+        )
+        
+        # Dependendo da versão do PyJWT, pode retornar bytes em vez de string
+        if isinstance(token, bytes):
+            return token.decode('utf-8')
+        return token
+    except Exception as e:
+        print(f"Erro ao gerar token: {str(e)}")
+        raise
 
-@app.route('/api/auth/login', methods=['POST'])
+# Authentication routes
+@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
 def login():
+    # Para depuração
+    print("==== Recebida requisição de login ====")
+    print(f"Método: {request.method}")
+    
+    # Handle OPTIONS request for CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+    
     try:
         data = request.get_json()
-        username = data.get('username')
+        print(f"Dados de login: {data}")
+        
+        username = data.get('username')  # Espera username em vez de email
         password = data.get('password')
         
-        # Check if auth_service is properly initialized
-        if not auth_service:
-            return jsonify({"success": False, "message": "Authentication service unavailable"}), 500
-            
-        result = auth_service.authenticate_user(username, password)
-        
-        if result['success']:
+        if not username or not password:
             return jsonify({
-                "success": True,
-                "token": result['token'],
-                "user_id": result['user_id'],
-                "name": result.get('name', '')
-            })
-        else:
-            return jsonify({"success": False, "message": result['message']}), 401
-            
+                "success": False,
+                "message": "Username e senha são obrigatórios"
+            }), 400
+        
+        # Autenticar usuário com username
+        user = db.authenticate_user(username, password)
+        
+        if not user:
+            return jsonify({
+                "success": False,
+                "message": "Username ou senha inválidos"
+            }), 401
+        
+        # Gerar token JWT
+        token = generate_token(user['_id'])
+        
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user_id": str(user['_id']),
+            "name": user.get('name', '')
+        })
     except Exception as e:
-        print(f"Login error: {str(e)}")
-        return jsonify({"success": False, "message": f"Login failed: {str(e)}"}), 500
+        print(f"Erro de login: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao fazer login: {str(e)}"
+        }), 500
+
+@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+def register():
+    # Para depuração
+    print("==== Recebida requisição de registro ====")
+    print(f"Método: {request.method}")
+    
+    # Handle OPTIONS request for CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+    
+    try:
+        data = request.get_json()
+        print(f"Dados de registro: {data}")
+        
+        # Validação dos dados
+        if not data.get('username') or not data.get('password') or not data.get('name'):
+            return jsonify({
+                "success": False,
+                "message": "Nome, username e senha são obrigatórios"
+            }), 400
+        
+        # Verificar se username já existe
+        if db.user_exists(data.get('username')):
+            print(f"Usuário '{data.get('username')}' já existe")
+            return jsonify({
+                "success": False,
+                "message": "Este nome de usuário já está em uso. Por favor, escolha outro."
+            }), 409
+        
+        # Criar novo usuário
+        user_id = db.create_user(data)
+        
+        # Gerar token JWT
+        token = generate_token(user_id)
+        
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user_id": str(user_id),
+            "name": data.get('name', '')
+        })
+    except Exception as e:
+        print(f"Erro de registro: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao criar conta: {str(e)}"
+        }), 500
 
 @app.route('/api/auth/verify', methods=['GET'])
 @token_required
@@ -721,6 +846,167 @@ def log_stt_event(user_id):
         print(f"Erro ao processar evento STT: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+@app.route('/api/games/generate', methods=['POST'])
+@token_required
+def generate_game():
+    try:
+        user_id = g.user_id
+        data = request.get_json()
+        
+        # Extract parameters from request
+        difficulty = data.get('difficulty')
+        game_type = data.get('game_type')
+        
+        # Generate game
+        game_data = game_generator.create_game(
+            user_id=user_id,
+            difficulty=difficulty,
+            game_type=game_type
+        )
+        
+        # Store game in database
+        game_id = db.store_game(user_id, game_data)
+        
+        # Return the game data
+        return jsonify({
+            "success": True,
+            "game": game_data
+        })
+    except Exception as e:
+        print(f"Game generation error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to generate game: {str(e)}"
+        }), 500
+
+# Add this route to use Gigi to generate games
+@app.route('/api/gigi/generate-game', methods=['POST'])
+@token_required
+def generate_gigi_game():
+    try:
+        # Coloque um log aqui para depuração
+        print("Received request for game generation")
+        print(f"Headers: {request.headers}")
+        print(f"Data: {request.get_json()}")
+        
+        user_id = g.user_id
+        data = request.get_json()
+        
+        # Log para depuração
+        print(f"User ID: {user_id}")
+        print(f"Request data: {data}")
+        
+        # Extract parameters from request
+        difficulty = data.get('difficulty')
+        game_type = data.get('game_type')
+        
+        # Initialize the game generator if it doesn't exist
+        global game_generator
+        if not game_generator:
+            game_generator = GameGenerator()
+        
+        # Generate game
+        game_data = game_generator.create_game(
+            user_id=user_id,
+            difficulty=difficulty,
+            game_type=game_type
+        )
+        
+        # Store game in database
+        # You might want to add this logic to save the game
+        try:
+            game_id = db.store_game(user_id, game_data)
+            game_data['game_id'] = game_id
+        except Exception as e:
+            print(f"Warning: Could not store game in database: {str(e)}")
+        
+        # Return the game data
+        return jsonify({
+            "success": True,
+            "game": game_data
+        })
+    except Exception as e:
+        print(f"Game generation error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Falha ao gerar jogo: {str(e)}"
+        }), 500
+
+# Adicione esta rota para lidar explicitamente com OPTIONS requests
+@app.route('/api/gigi/generate-game', methods=['OPTIONS'])
+def options_gigi_generate_game():
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
+
+# Add this route to use MCP to create personalized sessions
+@app.route('/api/mcp/create-session', methods=['POST'])
+@token_required
+def create_mcp_session():
+    try:
+        user_id = g.user_id
+        data = request.get_json()
+        user_profile = data.get('user_profile', {})
+        focus_areas = data.get('focus_areas', [])
+        
+        # Initialize MCP if not already done
+        global mcp_coordinator
+        if not mcp_coordinator:
+            mcp_coordinator = MCPCoordinator(db.client, OPENAI_API_KEY)
+        
+        # Get more comprehensive user profile from database if needed
+        if not user_profile or len(user_profile) == 0:
+            user_profile = db.get_user_profile(user_id)
+        
+        # Add focus areas to user profile
+        user_profile['focus_areas'] = focus_areas
+        
+        # Create a new session using MCP
+        session = mcp_coordinator.create_game_session(user_id, user_profile)
+        
+        # Save session to database
+        session_id = db.store_session(user_id, session)
+        
+        # Return session data
+        return jsonify({
+            "success": True,
+            "session": session
+        })
+    except Exception as e:
+        print(f"MCP session creation error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to create session: {str(e)}"
+        }), 500
+
+@app.route('/api/games/<game_id>', methods=['GET'])
+@token_required
+def get_game(game_id):
+    try:
+        user_id = g.user_id
+        
+        # Get game from database
+        game = db.get_game(game_id)
+        
+        if not game:
+            return jsonify({
+                "success": False,
+                "message": "Jogo não encontrado"
+            }), 404
+            
+        return jsonify({
+            "success": True,
+            "game": game
+        })
+    except Exception as e:
+        print(f"Error fetching game: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao buscar jogo: {str(e)}"
+        }), 500
+
 # Helper functions
 def calculate_average_score(user):
     completed_sessions = user.get("history", {}).get("completed_sessions", [])
@@ -729,5 +1015,5 @@ def calculate_average_score(user):
     
     return sum(session.get("score", 0) for session in completed_sessions) / len(completed_sessions)
 
-if __name__ == '__main__':
-    app.run(debug=DEBUG, host='0.0.0.0', port=5001)
+if __name__ == "__main__":
+    app.run(debug=True, port=5001, host='0.0.0.0')

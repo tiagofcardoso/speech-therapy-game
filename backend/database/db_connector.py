@@ -6,6 +6,7 @@ import uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from config import MONGODB_URI
+from bson.objectid import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -102,3 +103,93 @@ class DatabaseConnector:
         sessions = self.in_memory_db.get("sessions", {}).values()
         user_sessions = [s for s in sessions if s.get("user_id") == user_id]
         return sorted(user_sessions, key=lambda x: x.get("start_time", 0), reverse=True)[:limit]
+    
+    def user_exists(self, username):
+        """
+        Verifica se um usuário com o username fornecido já existe
+        """
+        try:
+            # Verifique separadamente para identificar o tipo de conflito
+            email_exists = self.db.users.find_one({"email": username}) is not None
+            username_exists = self.db.users.find_one({"username": username}) is not None
+            
+            if email_exists:
+                print(f"Usuário com email '{username}' já existe")
+            if username_exists:
+                print(f"Usuário com username '{username}' já existe")
+                
+            return email_exists or username_exists
+        except Exception as e:
+            print(f"Erro ao verificar se usuário existe: {str(e)}")
+            return False
+    
+    def create_user(self, user_data):
+        """
+        Cria um novo usuário no banco de dados
+        
+        Args:
+            user_data (dict): Dados do usuário (nome, username, senha)
+            
+        Returns:
+            str: ID do usuário criado
+        """
+        try:
+            from werkzeug.security import generate_password_hash
+            
+            # Criar objeto de usuário para inserção
+            new_user = {
+                "name": user_data.get("name"),
+                "username": user_data.get("username"),  # Novo campo username
+                "email": user_data.get("email", user_data.get("username")),  # Usar username como email se não fornecido
+                "password": generate_password_hash(user_data.get("password")),
+                "created_at": datetime.utcnow(),
+                "age": user_data.get("age"),  # Novo campo age
+                "statistics": {
+                    "exercises_completed": 0,
+                    "accuracy": 0,
+                    "last_login": datetime.utcnow()
+                }
+            }
+            
+            # Inserir usuário no banco
+            result = self.db.users.insert_one(new_user)
+            
+            # Retornar o ID do novo usuário
+            return result.inserted_id
+        except Exception as e:
+            print(f"Erro ao criar usuário: {str(e)}")
+            raise
+    
+    def authenticate_user(self, username, password):
+        """
+        Autentica um usuário com username e senha
+        
+        Args:
+            username (str): Username ou email do usuário
+            password (str): Senha do usuário
+            
+        Returns:
+            dict: Dados do usuário se autenticação bem-sucedida, None caso contrário
+        """
+        try:
+            from werkzeug.security import check_password_hash
+            
+            # Buscar usuário pelo username (que pode ser email)
+            user = self.db.users.find_one({"$or": [
+                {"email": username},
+                {"username": username}
+            ]})
+            
+            # Verificar se usuário existe e a senha está correta
+            if user and check_password_hash(user["password"], password):
+                # Atualizar estatísticas de último login
+                self.db.users.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"statistics.last_login": datetime.utcnow()}}
+                )
+                return user
+            
+            return None
+        except Exception as e:
+            print(f"Erro ao autenticar usuário: {str(e)}")
+            return None

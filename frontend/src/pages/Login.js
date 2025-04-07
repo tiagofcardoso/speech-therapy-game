@@ -23,6 +23,23 @@ const Login = () => {
         }
     };
 
+    const handleLogin = async (credentials) => {
+        try {
+            const response = await api.post('/api/auth/login', credentials);
+            if (response.data.success) {
+                // Store the token in localStorage
+                localStorage.setItem('token', response.data.token);
+                localStorage.setItem('user_id', response.data.user_id);
+                localStorage.setItem('name', response.data.name || '');
+
+                // Navigate to dashboard
+                navigate('/dashboard');
+            }
+        } catch (error) {
+            // Handle login error
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -36,24 +53,7 @@ const Login = () => {
             setIsLoading(true);
             console.log('Sending login request to backend...');
 
-            const response = await api.post('/api/auth/login', {
-                username,
-                password
-            });
-
-            console.log('Login response:', response.data);
-
-            if (response.data.success) {
-                // Store token in localStorage
-                localStorage.setItem('token', response.data.token);
-                localStorage.setItem('user_id', response.data.user_id);
-                localStorage.setItem('name', response.data.name || 'User');
-
-                // Navigate to dashboard
-                navigate('/dashboard');
-            } else {
-                setError(response.data.message || 'Invalid credentials');
-            }
+            await handleLogin({ username, password });
         } catch (err) {
             console.error('Login error:', err);
             // Mostrar mais detalhes do erro

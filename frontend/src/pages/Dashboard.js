@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import './Dashboard.css'; // Vamos criar este arquivo a seguir
 
@@ -9,9 +9,8 @@ const Dashboard = () => {
     const [exercises, setExercises] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // Carregar exercícios disponíveis
+    // Update the exercise data
     useEffect(() => {
-        // Exemplos de exercícios (normalmente viriam da API)
         setExercises([
             {
                 id: 1,
@@ -30,6 +29,13 @@ const Dashboard = () => {
                 title: 'Frases Complexas',
                 difficulty: 'advanced',
                 description: 'Pratique frases com múltiplos sons desafiadores'
+            },
+            // Change MCP to Gigi
+            {
+                id: 'gigi',
+                title: 'Gigi, o Gênio dos Jogos',
+                type: 'gigi',
+                description: 'Exercícios personalizados gerados pela IA com base no seu progresso'
             }
         ]);
     }, []);
@@ -41,9 +47,14 @@ const Dashboard = () => {
         navigate('/login');
     };
 
+    // Update the navigation function
     const startExercise = (exerciseId) => {
-        console.log(`Iniciando exercício ${exerciseId}`);
-        navigate(`/exercise/${exerciseId}`);
+        if (exerciseId === 'gigi') {
+            navigate('/gigi-games');
+        } else {
+            console.log(`Iniciando exercício ${exerciseId}`);
+            navigate(`/exercise/${exerciseId}`);
+        }
     };
 
     return (
@@ -68,18 +79,33 @@ const Dashboard = () => {
                     <h2>Exercícios Disponíveis</h2>
                     <div className="exercises-grid">
                         {exercises.map(exercise => (
-                            <div key={exercise.id} className={`exercise-card ${exercise.difficulty}`}>
-                                <h3>{exercise.title}</h3>
-                                <span className="difficulty-badge">
-                                    {exercise.difficulty === 'beginner' ? 'Iniciante' :
-                                        exercise.difficulty === 'intermediate' ? 'Intermediário' : 'Avançado'}
-                                </span>
+                            <div
+                                key={exercise.id}
+                                className={`exercise-card ${exercise.type === 'gigi' ? 'gigi' : exercise.difficulty}`}
+                            >
+                                <h3>
+                                    {exercise.title}
+                                    {exercise.type === 'gigi' && <i className="fas fa-magic gigi-icon"></i>}
+                                </h3>
+
+                                {exercise.type !== 'gigi' && (
+                                    <span className="difficulty-badge">
+                                        {exercise.difficulty === 'beginner' ? 'Iniciante' :
+                                            exercise.difficulty === 'intermediate' ? 'Intermediário' : 'Avançado'}
+                                    </span>
+                                )}
+
+                                {exercise.type === 'gigi' && (
+                                    <span className="gigi-badge">Inteligência Artificial</span>
+                                )}
+
                                 <p>{exercise.description}</p>
+
                                 <button
-                                    className="start-exercise-button"
+                                    className={`start-exercise-button ${exercise.type === 'gigi' ? 'gigi-button' : ''}`}
                                     onClick={() => startExercise(exercise.id)}
                                 >
-                                    Iniciar Exercício
+                                    {exercise.type === 'gigi' ? 'Consultar o Gênio' : 'Iniciar Exercício'}
                                 </button>
                             </div>
                         ))}

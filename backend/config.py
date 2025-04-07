@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 import urllib.parse
+from flask import Flask
+from flask_cors import CORS
 
 # Carrega variáveis de ambiente
 project_root = os.path.dirname(os.path.dirname(__file__))
@@ -33,3 +35,10 @@ JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '9f42e347d8c1a650b5e8c2e2d950f
 
 # Debug mode
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+
+# Create the Flask app instance
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'seu_segredo_padrao_aqui')
+
+# Configure CORS
+CORS(app)

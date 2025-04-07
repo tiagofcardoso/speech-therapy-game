@@ -1,14 +1,19 @@
 from typing import Dict, Any
 import uuid
-from openai import OpenAI
+from ai.openai_client import create_openai_client  # Nova importação
+import httpx
 
 from ai.agents.game_designer_agent import GameDesignerAgent
 from ai.agents.progression_manager_agent import ProgressionManagerAgent
 from ai.agents.tutor_agent import TutorAgent
 
 class MCPCoordinator:
-    def __init__(self):
-        """Initialize the MCP Coordinator with its agent components"""
+    def __init__(self, db_client, openai_api_key):
+        """Initialize MCP coordinator"""
+        self.db = db_client
+        # Substituir qualquer inicialização direta pelo novo método
+        self.openai_client = create_openai_client(api_key=openai_api_key)
+        
         self.agents = {
             "game_designer": GameDesignerAgent(),
             "progression_manager": ProgressionManagerAgent(),

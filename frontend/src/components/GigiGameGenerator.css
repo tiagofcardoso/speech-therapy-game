@@ -1,0 +1,409 @@
+.gigi-game-generator {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #333;
+    font-family: 'Roboto', sans-serif;
+}
+
+.gigi-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.gigi-avatar {
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(135deg, #9c27b0, #d500f9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 20px;
+    box-shadow: 0 4px 10px rgba(156, 39, 176, 0.3);
+}
+
+.gigi-emoji {
+    font-size: 40px;
+}
+
+.gigi-title h2 {
+    margin: 0;
+    color: #9c27b0;
+    font-size: 28px;
+}
+
+.gigi-subtitle {
+    margin: 5px 0 0;
+    color: #666;
+    font-size: 16px;
+}
+
+.gigi-intro {
+    background-color: #f3e5f5;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    font-size: 18px;
+    line-height: 1.5;
+}
+
+.gigi-request-section {
+    margin-bottom: 30px;
+}
+
+.gigi-quick-options {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.gigi-quick-button {
+    flex: 1;
+    min-width: 200px;
+    padding: 20px;
+    border: none;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gigi-quick-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+}
+
+.gigi-quick-button.surprise {
+    background-color: #9c27b0;
+    color: white;
+}
+
+.gigi-quick-button.customize {
+    background-color: white;
+    color: #9c27b0;
+    border: 2px solid #9c27b0;
+}
+
+.option-icon {
+    font-size: 30px;
+    margin-bottom: 10px;
+}
+
+.gigi-custom-options {
+    background-color: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+
+.gigi-custom-options h3 {
+    margin-top: 0;
+    color: #9c27b0;
+    margin-bottom: 20px;
+}
+
+.option-group {
+    margin-bottom: 20px;
+}
+
+.option-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #555;
+}
+
+.gigi-select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #333;
+    background-color: white;
+    transition: border-color 0.2s;
+}
+
+.gigi-select:focus {
+    border-color: #9c27b0;
+    outline: none;
+}
+
+.gigi-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+}
+
+.gigi-back-button,
+.gigi-generate-button {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.gigi-back-button {
+    background-color: #f5f5f5;
+    color: #555;
+}
+
+.gigi-back-button:hover {
+    background-color: #e0e0e0;
+}
+
+.gigi-generate-button {
+    background-color: #9c27b0;
+    color: white;
+}
+
+.gigi-generate-button:hover {
+    background-color: #7b1fa2;
+}
+
+.gigi-generate-button:disabled,
+.gigi-quick-button:disabled {
+    background-color: #d1d1d1;
+    cursor: not-allowed;
+    color: #888;
+}
+
+.gigi-loading {
+    text-align: center;
+    padding: 30px;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    margin-top: 20px;
+}
+
+.gigi-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(156, 39, 176, 0.2);
+    border-radius: 50%;
+    border-top-color: #9c27b0;
+    margin: 0 auto 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.gigi-error {
+    padding: 20px;
+    background-color: #fdecea;
+    border-radius: 12px;
+    margin-top: 20px;
+    text-align: center;
+}
+
+.gigi-retry-button {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-top: 15px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.gigi-game-result {
+    background-color: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    margin-top: 40px;
+    margin-bottom: 40px;
+    border-left: 5px solid #9c27b0;
+}
+
+.game-title {
+    color: #9c27b0;
+    font-size: 24px;
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.game-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.game-badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.game-badge.type {
+    background-color: #e1bee7;
+    color: #6a1b9a;
+}
+
+.game-badge.difficulty {
+    background-color: #bbdefb;
+    color: #0d47a1;
+}
+
+.game-badge.duration {
+    background-color: #c8e6c9;
+    color: #1b5e20;
+}
+
+.game-description {
+    font-size: 18px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.game-instructions,
+.game-exercises-preview {
+    background-color: #f9f9f9;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.game-instructions h4,
+.game-exercises-preview h4 {
+    margin-top: 0;
+    color: #555;
+}
+
+.exercises-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.exercise-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.exercise-item:last-child {
+    border-bottom: none;
+}
+
+.exercise-number {
+    width: 28px;
+    height: 28px;
+    background-color: #9c27b0;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.exercise-title {
+    font-weight: 500;
+}
+
+.gigi-start-game-button {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    background-color: #9c27b0;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: 30px;
+}
+
+.gigi-start-game-button:hover {
+    background-color: #7b1fa2;
+}
+
+.gigi-info {
+    background-color: #f3e5f5;
+    border-radius: 12px;
+    padding: 25px;
+    margin-top: 40px;
+}
+
+.gigi-info h3 {
+    color: #9c27b0;
+    margin-top: 0;
+}
+
+.game-types-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.game-type-card {
+    background-color: white;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.game-type-card h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.game-type-card p {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.game-type-card.articulation h4 {
+    color: #e91e63;
+}
+
+.game-type-card.vocabulary h4 {
+    color: #2196f3;
+}
+
+.game-type-card.fluency h4 {
+    color: #4caf50;
+}
+
+.game-type-card.pragmatic h4 {
+    color: #ff9800;
+}
+
+@media (max-width: 768px) {
+    .gigi-quick-options {
+        flex-direction: column;
+    }
+
+    .game-types-overview {
+        grid-template-columns: 1fr;
+    }
+}
