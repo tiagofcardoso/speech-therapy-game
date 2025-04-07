@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 from speech.recognition import recognize_speech
 from speech.synthesis import synthesize_speech, get_example_word_for_phoneme
@@ -37,7 +37,17 @@ if not OPENAI_API_KEY:
     print("   Set this in your .env file.\n")
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, 
+            static_folder='../frontend/build',
+            static_url_path='/')
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
 # Configure CORS para aceitar solicitações de qualquer origem
 CORS(app)
@@ -111,34 +121,29 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     try:
-        data = request.json
-        print(f"Login attempt with data: {data}")
-        
-        if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
-        
+        data = request.get_json()
         username = data.get('username')
         password = data.get('password')
         
-        print(f"Attempting login for user: {username}")
+        # Check if auth_service is properly initialized
+        if not auth_service:
+            return jsonify({"success": False, "message": "Authentication service unavailable"}), 500
+            
+        result = auth_service.authenticate_user(username, password)
         
-        if not username or not password:
-            return jsonify({"success": False, "message": "Username and password are required"}), 400
-        
-        auth_service = AuthService()
-        result = auth_service.login(username, password)
-        
-        print(f"Login result: {result}")
-        
-        if result.get("success"):
-            return jsonify(result), 200
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "token": result['token'],
+                "user_id": result['user_id'],
+                "name": result.get('name', '')
+            })
         else:
-            return jsonify(result), 401
+            return jsonify({"success": False, "message": result['message']}), 401
+            
     except Exception as e:
-        import traceback
-        print(f"Exception during login: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"success": False, "message": f"Server error: {str(e)}"}), 500
+        print(f"Login error: {str(e)}")
+        return jsonify({"success": False, "message": f"Login failed: {str(e)}"}), 500
 
 @app.route('/api/auth/verify', methods=['GET'])
 @token_required
@@ -686,7 +691,7 @@ def save_exercise_results(user_id):
         }), 200
     except Exception as e:
         print(f"Erro ao salvar resultado: {str(e)}")
-        return jsonify({"success": False, "message": "Erro ao salvar resultado"}), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Adicione este endpoint:
 
@@ -725,4 +730,4 @@ def calculate_average_score(user):
     return sum(session.get("score", 0) for session in completed_sessions) / len(completed_sessions)
 
 if __name__ == '__main__':
-    app.run(debug=DEBUG, host='0.0.0.0', port=5000)
+    app.run(debug=DEBUG, host='0.0.0.0', port=5001)

@@ -94,6 +94,7 @@ const Login = () => {
                         <input
                             type="text"
                             id="username"
+                            name="username"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             disabled={isLoading}
@@ -105,6 +106,7 @@ const Login = () => {
                         <input
                             type="password"
                             id="password"
+                            name="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             disabled={isLoading}
