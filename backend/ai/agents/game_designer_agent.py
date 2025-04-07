@@ -1,9 +1,9 @@
 from typing import List, Dict
 import json
 import os
-from openai import OpenAI
 from config import OPENAI_API_KEY
 from utils.logger import ai_logger
+from ai.openai_client import create_openai_client
 
 class GameDesignerAgent:
     """
@@ -11,30 +11,20 @@ class GameDesignerAgent:
     Generates appropriate exercises for the child's level and needs.
     """
     def __init__(self):
-        ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                               input_data={"event": "Inicializando agente"})
-                               
-        if not OPENAI_API_KEY:
-            print("Aviso: OPENAI_API_KEY não definida. Modo offline ativado.")
-            self.client = None
-            ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                                  output_data={"status": "offline", "reason": "API key não definida"})
-        else:
-            try:
-                # Definir API key no ambiente
-                os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-                # Inicialização simples sem parâmetros
-                self.client = OpenAI()
-                print("Cliente OpenAI inicializado com sucesso")
-                ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                                      output_data={"status": "success", "model": "gpt-3.5-turbo"})
-            except Exception as e:
-                print(f"Erro ao inicializar cliente OpenAI: {e}")
-                self.client = None
-                ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                                      error=str(e), output_data={"status": "error"})
+        """Initialize game designer agent"""
+        # Substituir inicialização antiga
+        self.client = create_openai_client()
         
-        self.model = "gpt-3.5-turbo"
+        if not self.client:
+            print("Aviso: Cliente OpenAI não disponível. Modo offline ativado.")
+            ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
+                                  output_data={"status": "offline", "reason": "Cliente não inicializado"})
+        else:
+            print("Cliente OpenAI inicializado com sucesso")
+            ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
+                                  output_data={"status": "success", "model": "GPT-4o"})
+        
+        self.model = "GPT-4o"
     
     def create_exercises(self, difficulty: str, count: int = 5) -> List[Dict]:
         """

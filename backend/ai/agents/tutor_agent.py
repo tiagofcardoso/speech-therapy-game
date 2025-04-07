@@ -1,10 +1,13 @@
 from typing import Dict, Any
-from openai import OpenAI
+from ai.openai_client import create_openai_client
 import json
 
 class TutorAgent:
     def __init__(self):
-        self.client = OpenAI()
+        """Initialize tutor agent"""
+        # Substituir inicialização antiga
+        self.client = create_openai_client()
+        # Resto do código...
     
     def create_instructions(self, user_profile: Dict[str, Any], difficulty: str) -> Dict[str, str]:
         """

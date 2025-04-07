@@ -1,12 +1,14 @@
 from typing import Dict, Any
-from openai import OpenAI
+from ai.openai_client import create_openai_client
 from config import OPENAI_API_KEY
 
 class ProgressionManagerAgent:
     """Agent responsible for tracking user progress and determining difficulty"""
     
     def __init__(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        """Initialize progression manager agent"""
+        # Substituir inicialização antiga
+        self.client = create_openai_client()
         self.user_history = {}
     
     def determine_difficulty(self, user_profile: Dict[str, Any]) -> str:

@@ -1,3 +1,4 @@
+import openai
 from ai.openai_client import create_openai_client  # Nova importação
 import os
 import random
@@ -82,6 +83,11 @@ class GameGenerator:
     def _generate_content(self, difficulty: str, game_type: str) -> Dict[str, Any]:
         """Generate game content using OpenAI"""
         try:
+            # Verificar se o cliente OpenAI está disponível
+            if self.client is None:
+                print("Cliente OpenAI não disponível. Usando conteúdo de fallback.")
+                return self._get_fallback_content(game_type, difficulty)
+            
             # Create system prompt based on game type
             system_prompt = self._create_system_prompt(game_type, difficulty)
             

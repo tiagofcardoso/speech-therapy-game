@@ -97,25 +97,27 @@ db = DatabaseConnector()
 game_generator = None
 mcp_coordinator = None
 
-# You can't use @app.before_first_request in newer Flask versions
-# Use this instead:
+# Substitua qualquer inicialização direta do MCPCoordinator
 @app.before_request
 def initialize_services():
     global game_generator, mcp_coordinator
     
-    # Only initialize if not already initialized
-    if game_generator is None:
+    # Verificar se já estão inicializados
+    if game_generator is None or mcp_coordinator is None:
         try:
-            # Initialize game generator
-            game_generator = GameGenerator()
+            # Inicializar game generator
+            if game_generator is None:
+                game_generator = GameGenerator()
+                print("GameGenerator inicializado com sucesso")
             
-            # Initialize MCP coordinator 
-            openai_api_key = os.environ.get("OPENAI_API_KEY")
-            if openai_api_key:
-                mcp_coordinator = MCPCoordinator(db_client=db, openai_api_key=openai_api_key)
-                print("MCPCoordinator initialized successfully")
-            else:
-                print("Warning: OPENAI_API_KEY not found. MCP features will be disabled.")
+            # Inicializar MCP coordinator sem especificar proxies
+            if mcp_coordinator is None:
+                openai_api_key = os.environ.get("OPENAI_API_KEY")
+                if openai_api_key:
+                    mcp_coordinator = MCPCoordinator(db_client=db, openai_api_key=openai_api_key)
+                    print("MCPCoordinator inicializado com sucesso")
+                else:
+                    print("Aviso: OPENAI_API_KEY não encontrada. Funcionalidades de IA serão limitadas.")
         except Exception as e:
             print(f"Error initializing services: {str(e)}")
 
@@ -133,6 +135,7 @@ else:
 
 # Adicione esta função antes das rotas de autenticação
 def generate_token(user_id):
+    print(f"JWT_SECRET_KEY utilizada: {JWT_SECRET_KEY}")
     """
     Gera um token JWT para o usuário
     
@@ -275,6 +278,36 @@ def register():
 def verify_auth(user_id):
     # If we get here, the token is valid
     return jsonify({"success": True, "valid": True, "user_id": user_id}), 200
+
+@app.route('/api/auth/test-token', methods=['GET'])
+def test_token():
+    """
+    Rota para testar a decodificação de token
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({'message': 'Token não encontrado no header'}), 401
+    
+    try:
+        token = auth_header.split(" ")[1]
+        
+        # Imprimir informações para debug
+        print(f"Testando token: {token[:10]}...")
+        print(f"Chave JWT: {JWT_SECRET_KEY[:5]}...")
+        
+        # Tentar decodificar
+        data = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        
+        return jsonify({
+            'success': True,
+            'decoded': data,
+            'user_id': data.get('user_id')
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 401
 
 # User profile routes
 @app.route('/api/user/profile/<user_id>', methods=['GET'])

@@ -193,3 +193,97 @@ class DatabaseConnector:
         except Exception as e:
             print(f"Erro ao autenticar usuário: {str(e)}")
             return None
+    
+    def store_game(self, user_id, game_data):
+        """
+        Armazena um jogo no banco de dados
+        
+        Args:
+            user_id (str): ID do usuário
+            game_data (dict): Dados do jogo
+            
+        Returns:
+            str: ID do jogo armazenado
+        """
+        try:
+            # Criar objeto de jogo para inserção
+            game = {
+                "user_id": user_id,
+                "game_type": game_data.get("game_type", "unknown"),
+                "difficulty": game_data.get("difficulty", "beginner"),
+                "title": game_data.get("title", "Jogo sem título"),
+                "content": game_data,
+                "created_at": datetime.now(),  # Corrigido!
+                "completed": False
+            }
+            
+            # Inserir jogo no banco
+            result = self.db.games.insert_one(game)
+            
+            # Retornar o ID do jogo
+            return result.inserted_id
+        except Exception as e:
+            print(f"Erro ao armazenar jogo: {str(e)}")
+            raise
+    
+    def get_game(self, game_id):
+        """
+        Busca um jogo pelo ID
+        
+        Args:
+            game_id (str): ID do jogo
+            
+        Returns:
+            dict: Dados do jogo, None se não encontrado
+        """
+        try:
+            # Converter string para ObjectId se necessário
+            if isinstance(game_id, str):
+                try:
+                    game_id = ObjectId(game_id)
+                except:
+                    # Se não for um ObjectId válido, tente buscar por ID numérico
+                    pass
+                    
+            # Buscar o jogo
+            if self.connected:
+                # Tente primeiro por _id (ObjectId)
+                game = self.db.games.find_one({"_id": game_id})
+                
+                # Se não encontrar, tente por ID numérico
+                if not game and isinstance(game_id, str):
+                    game = self.db.games.find_one({"id": game_id})
+                    
+                return game
+                
+            # Fallback para armazenamento em memória
+            return self.in_memory_db.get("games", {}).get(str(game_id))
+        
+        except Exception as e:
+            print(f"Erro ao buscar jogo: {str(e)}")
+            return None
+    
+    def get_user_games(self, user_id, limit=10):
+        """
+        Busca jogos de um usuário
+        
+        Args:
+            user_id (str): ID do usuário
+            limit (int): Número máximo de jogos a retornar
+            
+        Returns:
+            list: Lista de jogos do usuário
+        """
+        try:
+            if self.connected:
+                cursor = self.db.games.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+                return list(cursor)
+                
+            # Fallback para armazenamento em memória
+            games = self.in_memory_db.get("games", {}).values()
+            user_games = [g for g in games if g.get("user_id") == user_id]
+            return sorted(user_games, key=lambda x: x.get("created_at", 0), reverse=True)[:limit]
+        
+        except Exception as e:
+            print(f"Erro ao buscar jogos do usuário: {str(e)}")
+            return []
