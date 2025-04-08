@@ -149,6 +149,19 @@ Responda com um objeto JSON contendo:
 - "target_sound": som-alvo do jogo (ex.: "s", "r")
 - "estimated_duration": tempo estimado (ex.: "5-10 minutos")
 """
+
+        # For pronunciation exercises, ensure a consistent format
+        if game_type == "exercícios de pronúncia":
+            return base_prompt + """
+# TIPO: EXERCÍCIOS DE PRONÚNCIA
+Cada exercício DEVE ter EXATAMENTE os seguintes campos:
+- "word": uma palavra em português para praticar
+- "tip": uma dica para ajudar na pronúncia
+- "difficulty": nível da palavra de 1-3
+
+Certifique-se que cada exercício tenha exatamente esta estrutura sem campos adicionais.
+"""
+        # Other game types...
         if game_type == "palavras cruzadas":
             return base_prompt + """
 # TIPO: PALAVRAS CRUZADAS
@@ -163,11 +176,6 @@ Cada exercício deve ter: "clue" (dica), "answer" (resposta).
             return base_prompt + """
 # TIPO: RIMAS
 Cada exercício deve ter: "starter" (palavra inicial), "rhymes" (lista de rimas).
-"""
-        elif game_type == "exercícios de pronúncia":
-            return base_prompt + """
-# TIPO: EXERCÍCIOS DE PRONÚNCIA
-Cada exercício deve ter: "word" (palavra), "tip" (dica de pronúncia).
 """
         elif game_type == "desafios de pronúncia":
             return base_prompt + """

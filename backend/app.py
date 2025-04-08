@@ -992,7 +992,6 @@ def generate_game():
 @token_required
 def generate_gigi_game(user_id):
     try:
-        # Log request for debugging
         print("Received request for Gigi game generation")
         print(f"User ID: {user_id}")
 
@@ -1001,12 +1000,13 @@ def generate_gigi_game(user_id):
 
         # Extract parameters from request
         difficulty = data.get('difficulty', 'iniciante')
-        game_type = data.get('game_type', 'adivinhações')
+
+        # Always use 'exercícios de pronúncia' type to ensure compatibility
+        game_type = "exercícios de pronúncia"
 
         # Make sure the MCP coordinator is initialized
         global mcp_coordinator
         if not mcp_coordinator:
-            # Initialize using the initialize_services function
             initialize_services()
             if not mcp_coordinator:
                 return jsonify({
@@ -1014,43 +1014,51 @@ def generate_gigi_game(user_id):
                     "message": "Could not initialize game services"
                 }), 500
 
-        # Get user profile for personalization - handle the case where user is None
-        user = None
-        try:
-            user = db.get_user(user_id)
-        except Exception as e:
-            print(f"Warning: Could not retrieve user profile: {str(e)}")
-
-        # If user is None, create a default user object
-        if user is None:
-            print(f"User {user_id} not found in database, using default values")
-            user = {"name": "Player", "age": 7, "history": {}}
-
-        user_profile = {
-            "name": user.get('name', 'Player'),
-            "age": user.get('age', 7),
-            "history": user.get('history', {})
-        }
-
-        # Use the game_designer directly from MCP coordinator
+        # Use the game_designer to create a game
         game_data = mcp_coordinator.game_designer.create_game(
             user_id=user_id,
             difficulty=difficulty,
             game_type=game_type
         )
 
-        # Store game in database if needed
+        # Ensure the game structure is compatible with GameScreen.js
+        exercises = []
+        raw_exercises = game_data.get("content", [])
+
+        for idx, exercise in enumerate(raw_exercises):
+            # Transform each exercise to match what GameScreen expects
+            transformed_exercise = {
+                "word": exercise.get("word", ""),
+                "prompt": exercise.get("tip", "Pronuncie esta palavra"),
+                "hint": exercise.get("tip", "Fale devagar"),
+                "visual_cue": exercise.get("word", ""),
+                "index": idx,
+                "total": len(raw_exercises)
+            }
+            exercises.append(transformed_exercise)
+
+        # Create the final game object
+        compatible_game = {
+            "game_id": game_data.get("game_id", ""),
+            "title": game_data.get("title", "Jogo de Pronúncia"),
+            "description": game_data.get("description", ""),
+            "instructions": game_data.get("instructions", []),
+            "difficulty": game_data.get("difficulty", "iniciante"),
+            "game_type": "exercícios de pronúncia",
+            "content": exercises,
+            "metadata": game_data.get("metadata", {})
+        }
+
+        # Store the game in the database
         try:
-            game_id = db.store_game(user_id, game_data)
-            game_data['game_id'] = str(game_id)  # Convert ObjectId to string
+            game_id = db.store_game(user_id, compatible_game)
+            compatible_game["game_id"] = str(game_id)
         except Exception as e:
             print(f"Warning: Could not store game in database: {str(e)}")
-            # Continue without storing - the user will still get the game
 
-        # Return the game data
         return jsonify({
             "success": True,
-            "game": game_data
+            "game": compatible_game
         })
 
     except Exception as e:
@@ -1135,19 +1143,51 @@ def get_game(game_id, user_id):
 
         print(f"Game found: {game.get('title', 'No title')}")
 
-        # Return the game data with consistent format
+        # Get the content which might be in different formats
+        content = game.get("content", {})
+
+        # Transform game data to ensure it matches the expected format in GameScreen.js
+        transformed_game = {
+            "game_id": str(game.get("_id", game_id)),
+            "title": content.get("title", game.get("title", "Game")),
+            "description": content.get("description", game.get("description", "")),
+            "instructions": content.get("instructions", game.get("instructions", [])),
+            "difficulty": content.get("difficulty", game.get("difficulty", "iniciante")),
+            "game_type": content.get("game_type", game.get("game_type", "exercícios de pronúncia")),
+            "metadata": content.get("metadata", game.get("metadata", {}))
+        }
+
+        # Get the exercises and transform them into the format GameScreen.js expects
+        exercises = []
+        if "exercises" in content:
+            raw_exercises = content.get("exercises", [])
+        else:
+            raw_exercises = content.get("content", [])
+
+        if not raw_exercises and "exercises" in game:
+            raw_exercises = game.get("exercises", [])
+
+        print(f"Found {len(raw_exercises)} exercises")
+
+        # Transform the exercises into a consistent format
+        for idx, exercise in enumerate(raw_exercises):
+            transformed_exercise = {
+                "word": exercise.get("word", exercise.get("answer", exercise.get("starter", ""))),
+                "prompt": exercise.get("tip", exercise.get("clue", "Pronuncie esta palavra")),
+                "hint": exercise.get("tip", "Fale devagar"),
+                "visual_cue": exercise.get("word", ""),
+                "index": idx,
+                "total": len(raw_exercises)
+            }
+            exercises.append(transformed_exercise)
+
+        # Add the transformed exercises to the game
+        transformed_game["content"] = exercises
+
+        # Return the game data
         return jsonify({
             "success": True,
-            "game": {
-                "game_id": str(game.get("_id", game_id)),
-                "title": game.get("title", "Game"),
-                "description": game.get("description", ""),
-                "instructions": game.get("instructions", []),
-                "content": game.get("content", {}).get("exercises", []),
-                "difficulty": game.get("difficulty", "iniciante"),
-                "game_type": game.get("game_type", ""),
-                "metadata": game.get("metadata", {})
-            }
+            "game": transformed_game
         })
     except Exception as e:
         print(f"Error fetching game: {str(e)}")
