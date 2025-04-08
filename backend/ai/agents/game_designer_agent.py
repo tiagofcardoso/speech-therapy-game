@@ -1,173 +1,201 @@
-from typing import List, Dict
+from typing import Optional, Dict, List, Any
+import random
 import json
-import os
-from config import OPENAI_API_KEY
-from utils.logger import ai_logger
-from ai.openai_client import create_openai_client
+import logging
+import datetime
+from ..server.openai_client import create_openai_client
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 
 class GameDesignerAgent:
-    """
-    Responsible for designing speech therapy exercises and games.
-    Generates appropriate exercises for the child's level and needs.
-    """
     def __init__(self):
-        """Initialize game designer agent"""
-        # Substituir inicialização antiga
         self.client = create_openai_client()
-        
-        if not self.client:
-            print("Aviso: Cliente OpenAI não disponível. Modo offline ativado.")
-            ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                                  output_data={"status": "offline", "reason": "Cliente não inicializado"})
-        else:
-            print("Cliente OpenAI inicializado com sucesso")
-            ai_logger.log_agent_call("GameDesignerAgent", "__init__", 
-                                  output_data={"status": "success", "model": "GPT-4o"})
-        
-        self.model = "GPT-4o"
-    
-    def create_exercises(self, difficulty: str, count: int = 5) -> List[Dict]:
-        """
-        Create speech therapy exercises based on difficulty level
-        
-        Parameters:
-        difficulty (str): Difficulty level (beginner, intermediate, advanced)
-        count (int): Number of exercises to create
-        
-        Returns:
-        List[Dict]: List of exercise objects
-        """
-        ai_logger.log_agent_call("GameDesignerAgent", "create_exercises", 
-                              input_data={"difficulty": difficulty, "count": count})
-        
-        if not self.client:
-            print("AI client not available. Returning fallback exercises.")
-            fallback_exercises = [
-                {
-                    "word": "cat",
-                    "prompt": "This animal says meow",
-                    "hint": "Start with a 'k' sound",
-                    "visual_cue": "A furry pet with whiskers"
-                },
-                {
-                    "word": "dog",
-                    "prompt": "This animal says woof",
-                    "hint": "Start with a 'd' sound",
-                    "visual_cue": "A friendly pet that barks"
-                },
-                {
-                    "word": "sun",
-                    "prompt": "It shines in the sky during the day",
-                    "hint": "Start with an 's' sound",
-                    "visual_cue": "A bright yellow circle in the sky"
-                },
-                {
-                    "word": "ball",
-                    "prompt": "A round toy you can throw and catch",
-                    "hint": "Start with a 'b' sound",
-                    "visual_cue": "A round object that bounces"
-                },
-                {
-                    "word": "hat",
-                    "prompt": "You wear this on your head",
-                    "hint": "Start with a 'h' sound",
-                    "visual_cue": "Something you put on your head"
-                }
-            ][:count]
-            ai_logger.log_agent_call("GameDesignerAgent", "create_exercises", 
-                                  output_data={"exercises_count": len(fallback_exercises)})
-            return fallback_exercises
-        
-        prompt = f"""
-        Create {count} speech therapy exercises for children at {difficulty} level.
-        Each exercise should include:
-        1. A target word to pronounce
-        2. A prompt to help the child understand the word
-        3. A hint about how to pronounce it correctly
-        4. A visual cue description
+        self.logger = logging.getLogger("GameDesignerAgent")
+        self.game_types = ["palavras cruzadas", "adivinhações",
+                           "rimas", "exercícios de pronúncia", "desafios de pronúncia"]
+        self.difficulty_levels = ["iniciante", "médio", "avançado"]
+        self.target_sounds = ["s", "r", "l", "p",
+                              "t", "ch", "j", "m", "n", "lh", "nh"]
+        self.current_games = {}
+        self.logger.info("GameDesignerAgent initialized")
 
-        Return the response as a list of JSON objects with keys:
-        word, prompt, hint, visual_cue
+    def create_game(self, user_id: str, difficulty: Optional[str] = None, game_type: Optional[str] = None,
+                    age_group: Optional[str] = "crianças") -> Dict[str, Any]:
+        difficulty = difficulty if difficulty in self.difficulty_levels else self._get_user_difficulty(
+            user_id)
+        game_type = game_type if game_type in self.game_types else self._get_appropriate_game_type(
+            user_id)
+        age_group = age_group if age_group in [
+            "crianças", "adultos"] else "crianças"
 
-        Difficulty guidelines:
-        - beginner: Simple 1-2 syllable words with basic sounds
-        - intermediate: 2-3 syllable words with more complex sounds
-        - advanced: Multi-syllable words with challenging sound combinations
-        """
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a speech therapist who creates effective exercises for children."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=800,
-                response_format={"type": "json_object"}
-            )
-            
-            # Parse the response
-            content = response.choices[0].message.content
-            exercises = json.loads(content).get("exercises", [])
-            
-            # Ensure we have the right number of exercises
-            ai_logger.log_agent_call("GameDesignerAgent", "create_exercises", 
-                                  output_data={"exercises_count": len(exercises)})
-            return exercises[:count]
-            
-        except Exception as e:
-            print(f"Error creating exercises: {e}")
-            ai_logger.log_agent_call("GameDesignerAgent", "create_exercises", 
-                                  error=str(e))
-            # Return fallback exercises if API call fails
-            fallback_exercises = [
-                {
-                    "word": "cat",
-                    "prompt": "This animal says meow",
-                    "hint": "Start with a 'k' sound",
-                    "visual_cue": "A furry pet with whiskers"
-                },
-                {
-                    "word": "dog",
-                    "prompt": "This animal says woof",
-                    "hint": "Start with a 'd' sound",
-                    "visual_cue": "A friendly pet that barks"
-                },
-                {
-                    "word": "sun",
-                    "prompt": "It shines in the sky during the day",
-                    "hint": "Start with an 's' sound",
-                    "visual_cue": "A bright yellow circle in the sky"
-                },
-                {
-                    "word": "ball",
-                    "prompt": "A round toy you can throw and catch",
-                    "hint": "Start with a 'b' sound",
-                    "visual_cue": "A round object that bounces"
-                },
-                {
-                    "word": "hat",
-                    "prompt": "You wear this on your head",
-                    "hint": "Start with a 'h' sound",
-                    "visual_cue": "Something you put on your head"
-                }
-            ][:count]
-            ai_logger.log_agent_call("GameDesignerAgent", "create_exercises", 
-                                  output_data={"exercises_count": len(fallback_exercises)})
-            return fallback_exercises
-    
-    def generate_exercise(self, difficulty, age, focus_area):
-        """
-        Placeholder method - in a real implementation this would call the OpenAI API
-        """
-        if not self.client:
-            return {
-                "title": "Example Exercise (AI Not Available)",
-                "description": "This is a placeholder exercise because the OpenAI API is not configured.",
-                "difficulty": difficulty,
-                "instructions": "Speak the following words clearly...",
-                "words": ["cat", "dog", "house", "tree", "ball"]
+        self.logger.info(
+            f"Creating game for user {user_id}: difficulty={difficulty}, type={game_type}, age_group={age_group}")
+
+        game_content = self._generate_content(difficulty, game_type, age_group)
+        game_id = f"{random.randint(1000, 9999)}-{user_id}"
+
+        self.current_games[user_id] = {
+            "game_id": game_id,
+            "difficulty": difficulty,
+            "game_type": game_type,
+            "age_group": age_group,
+            "content": game_content,
+            "current_index": 0,
+            "score": 0,
+            "created_at": datetime.datetime.now().isoformat()
+        }
+
+        return {
+            "game_id": game_id,
+            "difficulty": difficulty,
+            "game_type": game_type,
+            "title": game_content.get("title", f"Jogo de {game_type.capitalize()}"),
+            "description": game_content.get("description", "Exercício de terapia da fala"),
+            "instructions": game_content.get("instructions", ["Siga as instruções do jogo"]),
+            "content": game_content.get("exercises", []),
+            "metadata": {
+                "target_skills": game_content.get("target_skills", []),
+                "target_sound": game_content.get("target_sound", "variado"),
+                "estimated_duration": game_content.get("estimated_duration", "5-10 minutos")
             }
-            
-        # Resto da implementação...
+        }
+
+    def get_current_exercise(self, user_id: str) -> Optional[Dict[str, Any]]:
+        if user_id not in self.current_games:
+            return None
+        game = self.current_games[user_id]
+        current_index = game["current_index"]
+        exercises = game["content"]["exercises"]
+        if current_index < len(exercises):
+            return exercises[current_index]
+        return None
+
+    def update_progress(self, user_id: str, score_increment: int):
+        if user_id in self.current_games:
+            self.current_games[user_id]["score"] += score_increment
+            self.current_games[user_id]["current_index"] += 1
+            self.logger.info(
+                f"Updated progress for {user_id}: score={self.current_games[user_id]['score']}, index={self.current_games[user_id]['current_index']}")
+
+    def _get_user_difficulty(self, user_id: str) -> str:
+        if user_id in self.current_games and self.current_games[user_id]["score"] > 50:
+            return "médio"
+        elif user_id in self.current_games and self.current_games[user_id]["score"] > 100:
+            return "avançado"
+        return "iniciante"
+
+    def _get_appropriate_game_type(self, user_id: str) -> str:
+        return random.choice(self.game_types)
+
+    def _generate_content(self, difficulty: str, game_type: str, age_group: str) -> Dict[str, Any]:
+        try:
+            if not self.client:
+                self.logger.warning(
+                    "OpenAI client unavailable. Using fallback.")
+                return self._get_fallback_content(game_type, difficulty, age_group)
+
+            system_prompt = self._create_system_prompt(
+                game_type, difficulty, age_group)
+            target_sound = random.choice(self.target_sounds)
+
+            user_prompt = (
+                f"Crie um jogo de terapia da fala do tipo '{game_type}' em português para {age_group}, "
+                f"nível '{difficulty}', focado no som '{target_sound}'. "
+                "Inclua um título criativo, descrição, instruções claras (em lista), 5 exercícios e metadados. "
+                "Retorne como um objeto JSON com as chaves: 'title', 'description', 'instructions' (lista), "
+                "'exercises' (lista), 'target_skills' (lista), 'target_sound' (string), 'estimated_duration' (string)."
+            )
+
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=500
+            )
+
+            content_json = json.loads(response.choices[0].message.content)
+            required_keys = ["title", "description",
+                             "instructions", "exercises", "target_sound"]
+            if not all(key in content_json for key in required_keys):
+                self.logger.warning(
+                    "Incomplete OpenAI response. Using fallback.")
+                return self._get_fallback_content(game_type, difficulty, age_group)
+
+            self.logger.info(f"Generated game: {content_json['title']}")
+            return content_json
+        except Exception as e:
+            self.logger.error(f"Error generating content: {str(e)}")
+            return self._get_fallback_content(game_type, difficulty, age_group)
+
+    def _create_system_prompt(self, game_type: str, difficulty: str, age_group: str) -> str:
+        base_prompt = f"""Você é um especialista em terapia da fala para {age_group} falantes de português.
+
+# CONTEXTO
+Você está criando jogos para uma aplicação de terapia da fala que ajuda {age_group} a melhorar suas habilidades de comunicação.
+O jogo deve ser adequado para o nível de dificuldade '{difficulty}' e focar no tipo '{game_type}'.
+
+# FORMATO DE SAÍDA
+Responda com um objeto JSON contendo:
+- "title": título criativo do jogo
+- "description": breve descrição do objetivo
+- "instructions": lista de instruções claras
+- "exercises": lista com 5 exercícios específicos
+- "target_skills": lista de habilidades desenvolvidas
+- "target_sound": som-alvo do jogo (ex.: "s", "r")
+- "estimated_duration": tempo estimado (ex.: "5-10 minutos")
+"""
+        if game_type == "palavras cruzadas":
+            return base_prompt + """
+# TIPO: PALAVRAS CRUZADAS
+Cada exercício deve ter: "clue" (dica), "word" (palavra), "position" (horizontal/vertical).
+"""
+        elif game_type == "adivinhações":
+            return base_prompt + """
+# TIPO: ADIVINHAÇÕES
+Cada exercício deve ter: "clue" (dica), "answer" (resposta).
+"""
+        elif game_type == "rimas":
+            return base_prompt + """
+# TIPO: RIMAS
+Cada exercício deve ter: "starter" (palavra inicial), "rhymes" (lista de rimas).
+"""
+        elif game_type == "exercícios de pronúncia":
+            return base_prompt + """
+# TIPO: EXERCÍCIOS DE PRONÚNCIA
+Cada exercício deve ter: "word" (palavra), "tip" (dica de pronúncia).
+"""
+        elif game_type == "desafios de pronúncia":
+            return base_prompt + """
+# TIPO: DESAFIOS DE PRONÚNCIA
+Cada exercício deve ter: "sentence" (frase), "challenge" (desafio específico).
+"""
+
+    def _get_fallback_content(self, game_type: str, difficulty: str, age_group: str) -> Dict[str, Any]:
+        target_sound = random.choice(self.target_sounds)
+        if game_type == "exercícios de pronúncia":
+            return {
+                "title": "Sons Simples",
+                "description": "Pratique o som-alvo com palavras fáceis.",
+                "instructions": ["Diga cada palavra em voz alta."],
+                "exercises": [
+                    {"word": "sol", "tip": "Destaque o 's'"},
+                    {"word": "sapo", "tip": "Foco no 's'"}
+                ],
+                "target_skills": ["articulação"],
+                "target_sound": "s",
+                "estimated_duration": "5 minutos"
+            }
+        return {
+            "title": f"Jogo de {game_type.capitalize()}",
+            "description": "Pratique o som-alvo.",
+            "instructions": ["Diga as palavras em voz alta."],
+            "exercises": [{"word": "sol", "tip": "Destaque o 's'"}],
+            "target_skills": ["articulação"],
+            "target_sound": "s",
+            "estimated_duration": "5 minutos"
+        }
