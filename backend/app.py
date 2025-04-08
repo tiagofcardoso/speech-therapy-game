@@ -1119,27 +1119,54 @@ def create_mcp_session():
 
 @app.route('/api/games/<game_id>', methods=['GET'])
 @token_required
-def get_game(game_id, user_id):  # Add user_id parameter here
+def get_game(game_id, user_id):
     try:
+        print(f"Fetching game with ID: {game_id} for user: {user_id}")
+
         # Get game from database
         game = db.get_game(game_id)
 
         if not game:
+            print(f"Game not found: {game_id}")
             return jsonify({
                 "success": False,
                 "message": "Game not found"
             }), 404
 
+        print(f"Game found: {game.get('title', 'No title')}")
+
+        # Return the game data with consistent format
         return jsonify({
             "success": True,
-            "game": game
+            "game": {
+                "game_id": str(game.get("_id", game_id)),
+                "title": game.get("title", "Game"),
+                "description": game.get("description", ""),
+                "instructions": game.get("instructions", []),
+                "content": game.get("content", {}).get("exercises", []),
+                "difficulty": game.get("difficulty", "iniciante"),
+                "game_type": game.get("game_type", ""),
+                "metadata": game.get("metadata", {})
+            }
         })
     except Exception as e:
         print(f"Error fetching game: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "message": f"Error fetching game: {str(e)}"
         }), 500
+
+
+@app.route('/api/games/<game_id>', methods=['OPTIONS'])
+def options_get_game(game_id):
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers',
+                         'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+    return response
 
 # Helper functions
 

@@ -59,6 +59,38 @@ const GameScreen = () => {
         setShowInstructions(false);
     };
 
+    // Add this function to your GameScreen component
+
+    const fetchGame = async (gameId) => {
+        try {
+            setIsLoading(true);
+            setError(null);
+
+            const token = localStorage.getItem('token');
+            const response = await axios.get(`/api/games/${gameId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.data.success) {
+                console.error('Error in game data:', response.data.message);
+                setError(response.data.message || 'Failed to load game data');
+                return null;
+            }
+
+            // Successfully loaded the game
+            return response.data.game;
+        } catch (error) {
+            console.error('Error fetching game:', error);
+            setError(error.message || 'Failed to load game');
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleRecognitionComplete = async (recognizedText) => {
         if (!sessionId || !recognizedText) return;
 
