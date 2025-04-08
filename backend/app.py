@@ -1119,17 +1119,15 @@ def create_mcp_session():
 
 @app.route('/api/games/<game_id>', methods=['GET'])
 @token_required
-def get_game(game_id):
+def get_game(game_id, user_id):  # Add user_id parameter here
     try:
-        user_id = g.user_id
-
         # Get game from database
         game = db.get_game(game_id)
 
         if not game:
             return jsonify({
                 "success": False,
-                "message": "Jogo não encontrado"
+                "message": "Game not found"
             }), 404
 
         return jsonify({
@@ -1140,7 +1138,7 @@ def get_game(game_id):
         print(f"Error fetching game: {str(e)}")
         return jsonify({
             "success": False,
-            "message": f"Erro ao buscar jogo: {str(e)}"
+            "message": f"Error fetching game: {str(e)}"
         }), 500
 
 # Helper functions
