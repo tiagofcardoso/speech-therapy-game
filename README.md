@@ -1,85 +1,181 @@
 # Speech Therapy Game
 
-This project is an interactive speech therapy game designed to assist children in improving their speech pronunciation through engaging gameplay. The game utilizes artificial intelligence to provide feedback and adapt the difficulty level based on the user's progress.
+An interactive application for speech therapy, developed to help children and adults improve their pronunciation skills through engaging games and exercises.
 
-## Project Structure
+## Main Features
 
-The project is divided into two main parts: the backend and the frontend.
+- **Interactive Speech Therapy Games**: Customized exercises for different sounds and difficulty levels
+- **Speech Recognition**: Real-time pronunciation assessment with personalized feedback
+- **Visual Feedback**: Audio visualization to show when the user is speaking
+- **Adaptation for European Portuguese**: Interface and content adapted for users in Portugal
+- **Progression System**: Tracking progress and adapting difficulty to the user's level
+
+## MCP (Model Context Protocol) Agent Architecture
+
+The project uses an advanced MCP architecture with various specialized agents working together:
+
+- **MCPCoordinator**: Orchestrates communication between agents and manages game sessions
+- **GameDesignerAgent**: Responsible for creating customized games and exercises
+- **SpeechEvaluatorAgent**: Evaluates the user's pronunciation using AI models
+- **TutorAgent**: Provides pedagogical feedback and personalized instructions
+- **ProgressionManagerAgent**: Monitors user progress and adjusts difficulty
+
+This modular architecture allows dynamic generation of educational content adapted to the specific needs of each user.
+
+## Technologies Used
+
+- **Frontend**: React, JavaScript, CSS
+- **Backend**: Python, Flask
+- **Database**: MongoDB
+- **AI**: OpenAI API (GPT-4, GPT-4o-mini)
+- **Speech Processing**: Speech-to-Text, Text-to-Speech
+
+## Implementation Details
+
+### 1. Speech Recognition and Evaluation
+
+We implemented a comprehensive speech recognition and evaluation system:
+
+1. **Audio Recording**:
+   - Used MediaRecorder API for capturing audio input
+   - Implemented WebAudio API for real-time volume analysis
+   - Added visual feedback during recording
+
+2. **Audio Processing**:
+   - Convert WebM audio to WAV format using FFmpeg
+   - Handle audio format compatibility issues
+   - Implemented error handling for audio processing failures
+
+3. **Speech-to-Text**:
+   - Integration with speech recognition API
+   - Fallback mechanisms when recognition fails
+   - Error logging and debugging information
+
+4. **Pronunciation Evaluation**:
+   - AI-based evaluation using OpenAI models
+   - Scoring system based on pronunciation accuracy
+   - Detailed feedback on specific sounds that need improvement
+
+### 2. European Portuguese Adaptation
+
+We fully adapted the application for European Portuguese:
+
+1. **System Prompts**:
+   - Translated all AI agent prompts to European Portuguese
+   - Adapted language style to match Portuguese from Portugal
+   - Updated language-specific instructions
+
+2. **Interface Language**:
+   - Changed verb forms from third person to second person (tu vs. você)
+   - Updated expressions and vocabulary to match European Portuguese
+   - Ensured consistency across the entire application
+
+3. **Feedback Messages**:
+   - Replaced Brazilian Portuguese expressions with European equivalents
+   - Adjusted tone and formality level
+   - Updated all encouragement and instruction messages
+
+### 3. Visual Feedback System
+
+We implemented a comprehensive visual feedback system to enhance user experience:
+
+1. **Audio Level Visualization**:
+   - Added real-time audio level indicators
+   - Created animated bars that respond to user's voice
+   - Implemented threshold detection for speaking/not speaking states
+
+2. **Recording Button Enhancements**:
+   - Added microphone icon to recording button
+   - Implemented vibration effect when speaking is detected
+   - Color changes to indicate recording state (purple/red)
+
+3. **Feedback Indicators**:
+   - Clear visual distinction between correct and incorrect responses
+   - Progress tracking visualization
+   - Score display and celebration animations
+
+### 4. Error Handling and Performance Improvements
+
+We significantly improved the robustness of the application:
+
+1. **Audio Format Compatibility**:
+   - Addressed WebM to WAV conversion issues
+   - Implemented format detection and fallback options
+   - Added proper cleanup of temporary files
+
+2. **Network Error Handling**:
+   - Implemented token refresh mechanism
+   - Added retry logic for failed API calls
+   - Improved error messages for users
+
+3. **Fallback Mechanisms**:
+   - Text similarity comparison when speech recognition fails
+   - Default responses when AI services are unavailable
+   - Graceful degradation when features aren't available
+
+4. **Performance Optimization**:
+   - Reduced unnecessary re-renders
+   - Optimized audio processing
+   - Improved resource cleanup
+
+### 5. AI Integration Improvements
+
+We enhanced the AI integration for better speech evaluation:
+
+1. **SpeechEvaluatorAgent**:
+   - Fixed type import issues
+   - Improved prompt design for better evaluation
+   - Enhanced error handling and fallback responses
+
+2. **GameDesignerAgent**:
+   - Improved exercise generation
+   - Added support for different difficulty levels
+   - Enhanced exercise format for pronunciation practice
+
+3. **TutorAgent**:
+   - Improved feedback generation
+   - Added more encouraging and specific feedback
+   - Supported multiple languages and accents
+
+4. **ProgressionManagerAgent**:
+   - Added user history tracking
+   - Implemented adaptive difficulty adjustment
+   - Enhanced scoring and progression metrics
+
+## Installation
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- Python (v3.9 or higher)
+- MongoDB
+- FFmpeg (for audio processing)
 
 ### Backend
 
-The backend is built using Python and includes the following components:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/speech-therapy-game.git
+   cd speech-therapy-game/backend
 
-- **app.py**: The main entry point for the backend application, initializing the web server and setting up routes.
-- **ai/tutor.py**: Contains the `Tutor` class for providing feedback and guidance during therapy sessions.
-- **ai/game_generator.py**: Exports the `GameGenerator` class that creates game instances with varying difficulty levels.
-- **models/**: Contains the data models for users and games.
-  - **user.py**: Defines the `User` class for user management.
-  - **game.py**: Defines the `Game` class for game management.
-- **speech/**: Contains functions for speech recognition and synthesis.
-  - **recognition.py**: Functions for processing and evaluating user speech input.
-  - **synthesis.py**: Functions for generating spoken prompts.
-- **database/db_connector.py**: Handles database connections and queries.
-- **requirements.txt**: Lists the dependencies required for the backend.
-- **tests/test_speech.py**: Contains unit tests for speech functionalities.
+2. Create and activate virtual environment:  
+  python -m venv venv
+  source venv/bin/activate  # Linux/Mac
+  venv\Scripts\activate  # Windows
 
-### Frontend
+3. Install dependencies: 
+  pip install -r requirements.txt
 
-The frontend is built using React and includes the following components:
+4. Install additional dependencies for audio processing:
+  pip install SpeechRecognition pydub rapidfuzz
 
-- **public/index.html**: The main HTML file for the web application.
-- **src/components/**: Contains reusable components for the application.
-  - **GameArea.js**: Manages the game interface and user interactions.
-  - **ProgressTracker.js**: Displays the user's progress through the game levels.
-  - **SpeechControls.js**: Provides controls for speech recognition.
-- **src/pages/**: Contains the main pages of the application.
-  - **Dashboard.js**: The main navigation page.
-  - **GameScreen.js**: Displays the active game.
-  - **Reports.js**: Shows performance and progress reports.
-- **src/assets/styles/main.css**: Contains the main styles for the frontend.
-- **src/App.js**: The main application component that sets up routing.
-- **src/index.js**: The entry point for the React application.
-- **package.json**: Configuration file for npm, listing dependencies and scripts.
+5. cp .env.example .env 
+# Edit .env with your settings
 
-## Setup Instructions
+### Start application
 
-1. **Clone the repository**:
-   ```
-   git clone https://github.com/yourusername/speech-therapy-game.git
-   cd speech-therapy-game
-   ```
+1. Start the server BACKEND:
+    python app.py
 
-2. **Backend Setup**:
-   - Navigate to the `backend` directory.
-   - Install the required dependencies:
-     ```
-     pip install -r requirements.txt
-     ```
-   - Run the backend server:
-     ```
-     python app.py
-     ```
-
-3. **Frontend Setup**:
-   - Navigate to the `frontend` directory.
-   - Install the required dependencies:
-     ```
-     npm install
-     ```
-   - Start the frontend application:
-     ```
-     npm start
-     ```
-
-## Usage
-
-Once both the backend and frontend are running, you can access the application in your web browser at `http://localhost:3000`. The game will guide users through various levels of speech therapy exercises, adapting to their progress and providing feedback.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.# Speech-therapy-app
-# speech-therapy-game
+2. Start app FRONTEND:
+    npm start
