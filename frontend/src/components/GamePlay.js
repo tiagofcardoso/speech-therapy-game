@@ -22,11 +22,13 @@ const GamePlay = () => {
                 setLoading(true);
                 const response = await api.get(`/api/games/${gameId}`);
                 if (response.data.success) {
+                    console.log("Game data received:", response.data.game);
                     setGame(response.data.game);
                 } else {
                     setError("Não foi possível carregar o jogo");
                 }
             } catch (err) {
+                console.error("Error fetching game:", err);
                 setError("Erro ao carregar o jogo: " + (err.response?.data?.message || err.message));
             } finally {
                 setLoading(false);
@@ -46,7 +48,7 @@ const GamePlay = () => {
             // For now, we'll just simulate feedback
 
             // Simple placeholder evaluation logic
-            const currentExercise = game.content[currentExerciseIndex];
+            const currentExercise = getCurrentExercise();
             const isCorrect = Math.random() > 0.3; // 70% chance of being "correct"
 
             setFeedback({
@@ -69,7 +71,7 @@ const GamePlay = () => {
     };
 
     const moveToNextExercise = () => {
-        if (currentExerciseIndex < game.content.length - 1) {
+        if (currentExerciseIndex < (game.content?.length || 0) - 1) {
             setCurrentExerciseIndex(prev => prev + 1);
             setFeedback(null);
         } else {
@@ -121,7 +123,7 @@ const GamePlay = () => {
                     <div className="score-bar">
                         <div
                             className="score-fill"
-                            style={{ width: `${Math.min(100, (score / (game.content.length * 10)) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (score / ((game.content?.length || 1) * 10)) * 100)}%` }}
                         ></div>
                     </div>
                 </div>
@@ -160,68 +162,36 @@ const GamePlay = () => {
             <div className="game-play-header">
                 <h2>{game.title}</h2>
                 <div className="game-progress">
-                    <span>Exercício {currentExerciseIndex + 1} de {game.content.length}</span>
+                    <span>Exercício {currentExerciseIndex + 1} de {game.content?.length || 0}</span>
                     <div className="progress-bar">
                         <div
                             className="progress-fill"
-                            style={{ width: `${((currentExerciseIndex + 1) / game.content.length) * 100}%` }}
+                            style={{ width: `${((currentExerciseIndex + 1) / (game.content?.length || 1)) * 100}%` }}
                         ></div>
                     </div>
                 </div>
             </div>
 
             <div className="exercise-container">
-                <h3>{currentExercise.title}</h3>
+                <h3>{currentExercise.word || "Exercício de pronúncia"}</h3>
 
                 <div className="exercise-details">
-                    {game.game_type === 'articulation' && (
-                        <div className="target-sound">
-                            <span className="label">Som Alvo:</span>
-                            <span className="value">{currentExercise.target_sound}</span>
+                    <p className="exercise-description">{currentExercise.prompt || currentExercise.description || "Pronuncie a palavra corretamente"}</p>
+
+                    {currentExercise.hint && (
+                        <div className="hint-box">
+                            <span className="hint-label">Dica:</span>
+                            <span className="hint-text">{currentExercise.hint}</span>
                         </div>
                     )}
 
-                    <p className="exercise-description">{currentExercise.description}</p>
-
-                    {game.game_type === 'articulation' && currentExercise.words && (
-                        <div className="word-list">
-                            <h4>Palavras para praticar:</h4>
-                            <div className="words">
-                                {currentExercise.words.map((word, index) => (
-                                    <span key={index} className="practice-word">{word}</span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {game.game_type === 'vocabulary' && currentExercise.words_or_prompts && (
-                        <div className="word-list">
-                            <h4>Palavras/Prompts:</h4>
-                            <div className="words">
-                                {currentExercise.words_or_prompts.map((word, index) => (
-                                    <span key={index} className="practice-word">{word}</span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {game.game_type === 'fluency' && currentExercise.script_or_text && (
-                        <div className="script-text">
-                            <h4>Texto para praticar:</h4>
-                            <p className="practice-text">{currentExercise.script_or_text}</p>
-                        </div>
-                    )}
-
-                    {game.game_type === 'pragmatic' && currentExercise.scenario && (
-                        <div className="scenario-text">
-                            <h4>Cenário:</h4>
-                            <p className="practice-text">{currentExercise.scenario}</p>
-                        </div>
-                    )}
+                    <div className="word-display">
+                        <h2 className="highlight-word">{currentExercise.word}</h2>
+                    </div>
 
                     <div className="activity-instructions">
                         <h4>Atividade:</h4>
-                        <p>{currentExercise.activity}</p>
+                        <p>{currentExercise.activity || "Diga esta palavra em voz alta, prestando atenção na pronúncia."}</p>
                     </div>
                 </div>
 
@@ -232,7 +202,7 @@ const GamePlay = () => {
                             onClick={moveToNextExercise}
                             className="next-exercise-button"
                         >
-                            {currentExerciseIndex < game.content.length - 1 ? 'Próximo Exercício' : 'Finalizar Jogo'}
+                            {currentExerciseIndex < (game.content?.length || 0) - 1 ? 'Próximo Exercício' : 'Finalizar Jogo'}
                         </button>
                     </div>
                 ) : (

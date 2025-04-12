@@ -1159,23 +1159,37 @@ def get_game(game_id, user_id):
 
         # Get the exercises and transform them into the format GameScreen.js expects
         exercises = []
-        if "exercises" in content:
-            raw_exercises = content.get("exercises", [])
-        else:
-            raw_exercises = content.get("content", [])
 
-        if not raw_exercises and "exercises" in game:
+        # Check different possible locations for exercises
+        if isinstance(content, dict) and "exercises" in content:
+            raw_exercises = content.get("exercises", [])
+        elif isinstance(content, dict) and "content" in content:
+            raw_exercises = content.get("content", [])
+        elif "exercises" in game:
             raw_exercises = game.get("exercises", [])
+        elif isinstance(content, list):
+            # Sometimes content itself might be the list of exercises
+            raw_exercises = content
+        else:
+            raw_exercises = []
 
         print(f"Found {len(raw_exercises)} exercises")
 
+        # Add debugging to see raw exercise structure
+        if raw_exercises and len(raw_exercises) > 0:
+            print(f"First exercise sample: {raw_exercises[0]}")
+
         # Transform the exercises into a consistent format
         for idx, exercise in enumerate(raw_exercises):
+            if not isinstance(exercise, dict):
+                print(f"Skipping non-dict exercise: {exercise}")
+                continue
+
             transformed_exercise = {
-                "word": exercise.get("word", exercise.get("answer", exercise.get("starter", ""))),
-                "prompt": exercise.get("tip", exercise.get("clue", "Pronuncie esta palavra")),
-                "hint": exercise.get("tip", "Fale devagar"),
-                "visual_cue": exercise.get("word", ""),
+                "word": exercise.get("word", exercise.get("text", exercise.get("answer", exercise.get("starter", "")))),
+                "prompt": exercise.get("prompt", exercise.get("tip", exercise.get("clue", "Pronuncie esta palavra"))),
+                "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
+                "visual_cue": exercise.get("visual_cue", exercise.get("word", "")),
                 "index": idx,
                 "total": len(raw_exercises)
             }
@@ -1191,7 +1205,6 @@ def get_game(game_id, user_id):
         })
     except Exception as e:
         print(f"Error fetching game: {str(e)}")
-        import traceback
         traceback.print_exc()
         return jsonify({
             "success": False,
