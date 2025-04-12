@@ -77,14 +77,6 @@ const Login = () => {
                     <h3>Login to Your Account</h3>
                 </div>
 
-                {/* Botão de teste API */}
-                <button
-                    type="button"
-                    onClick={testApi}
-                    style={{ marginBottom: '15px', padding: '8px 12px', backgroundColor: '#4CAF50' }}
-                >
-                    Test API Connection
-                </button>
 
                 {error && <div className="auth-error">{error}</div>}
 
