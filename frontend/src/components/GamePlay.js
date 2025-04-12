@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import './GamePlay.css';
+import AudioPlayer from './AudioPlayer';
 
 const GamePlay = () => {
     const { gameId } = useParams();
@@ -19,6 +20,7 @@ const GamePlay = () => {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [audioVolume, setAudioVolume] = useState(0);
     const [audioLevels, setAudioLevels] = useState(Array(10).fill(0));
+    const [feedbackAudio, setFeedbackAudio] = useState(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const audioAnalyzerRef = useRef(null);
@@ -173,7 +175,7 @@ const GamePlay = () => {
 
             console.log("Evaluation response:", response.data);
 
-            const { isCorrect, score, feedback, recognized_text } = response.data;
+            const { isCorrect, score, feedback, audio_feedback, recognized_text } = response.data;
 
             setFeedback({
                 correct: isCorrect,
@@ -182,6 +184,9 @@ const GamePlay = () => {
                     : "Tenta novamente. Presta atenção na pronúncia."),
                 recognizedText: recognized_text || "Texto não reconhecido"
             });
+
+            // Armazenar o áudio de feedback para reprodução
+            setFeedbackAudio(audio_feedback);
 
             if (isCorrect) {
                 setScore(prev => prev + score);
@@ -196,6 +201,7 @@ const GamePlay = () => {
         if (currentExerciseIndex < (game.content?.length || 0) - 1) {
             setCurrentExerciseIndex(prev => prev + 1);
             setFeedback(null);
+            setFeedbackAudio(null);
         } else {
             // Game complete
             setGameComplete(true);
@@ -304,6 +310,7 @@ const GamePlay = () => {
                             setScore(0);
                             setGameComplete(false);
                             setFeedback(null);
+                            setFeedbackAudio(null);
                         }}
                         className="play-again-button"
                     >
@@ -366,6 +373,13 @@ const GamePlay = () => {
                 {feedback ? (
                     <div className={`feedback-container ${feedback.correct ? 'correct' : 'incorrect'}`}>
                         <p>{feedback.message}</p>
+
+                        {feedbackAudio && (
+                            <AudioPlayer
+                                audioData={feedbackAudio}
+                                autoPlay={true}
+                            />
+                        )}
 
                         {feedback.recognizedText && (
                             <div className="recognition-result">

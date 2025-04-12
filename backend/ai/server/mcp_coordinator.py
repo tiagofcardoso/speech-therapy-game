@@ -51,7 +51,7 @@ class MCPCoordinator:
     def connect(self) -> bool:
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": "Test connection"}],
                 max_tokens=10
             )

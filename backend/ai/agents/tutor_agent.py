@@ -3,7 +3,9 @@ import json
 import logging
 import os
 from openai import OpenAI
+from speech.synthesis import synthesize_speech
 
+# Corrigir o formato do logging - havia um '%s' sem o valor correspondente
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -14,9 +16,12 @@ class TutorAgent:
         self.logger = logging.getLogger("TutorAgent")
         self.game_designer = game_designer
         self.user_sessions = {}
-        self.logger.info("TutorAgent initialized")
+        self.voice_enabled = os.environ.get(
+            "ENABLE_TUTOR_VOICE", "true").lower() == "true"
+        self.logger.info(
+            f"TutorAgent initialized with voice {'enabled' if self.voice_enabled else 'disabled'}")
 
-    def create_instructions(self, user_profile: Dict[str, Any], difficulty: str) -> Dict[str, str]:
+    def create_instructions(self, user_profile: Dict[str, Any], difficulty: str) -> Dict[str, Any]:
         name = user_profile.get("name", "amigo")
         age = user_profile.get("age", 7)
         try:
@@ -33,39 +38,91 @@ class TutorAgent:
                     ],
                     response_format={"type": "json_object"}
                 )
-                return json.loads(response.choices[0].message.content)
+                instructions = json.loads(response.choices[0].message.content)
             except Exception as e:
                 self.logger.warning(f"Error with gpt-4o-mini: {str(e)}")
-                # Fallback to gpt-3.5-turbo
+                # Fallback to gpt-4o-mini
                 response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system",
-                            "content": "Você é um terapeuta da fala amigável."},
+                            "content": "És um terapeuta da fala amigável."},
                         {"role": "user", "content": prompt +
                             " Responda apenas com o objeto JSON, sem texto adicional."}
                     ]
                 )
                 try:
-                    return json.loads(response.choices[0].message.content)
+                    instructions = json.loads(
+                        response.choices[0].message.content)
                 except json.JSONDecodeError:
                     self.logger.warning("Failed to parse JSON from response")
+                    # Default fallback if all else fails
+                    instructions = {
+                        "greeting": f"Olá, {name}!",
+                        "explanation": "Vamos praticar palavras legais hoje!",
+                        "encouragement": "Vais arrasar!"
+                    }
+
+            # Generate voice if enabled
+            if self.voice_enabled:
+                try:
+                    # Configuração específica para o caráter do tutor
+                    # Use voz feminina para o tutor com motor padrão (não neural)
+                    voice_settings = {"voice_id": "Ines", "engine": "standard"}
+
+                    greeting_audio = synthesize_speech(
+                        instructions["greeting"], voice_settings)
+                    explanation_audio = synthesize_speech(
+                        instructions["explanation"], voice_settings)
+                    encouragement_audio = synthesize_speech(
+                        instructions["encouragement"], voice_settings)
+
+                    if greeting_audio and explanation_audio and encouragement_audio:
+                        instructions["audio"] = {
+                            "greeting": greeting_audio,
+                            "explanation": explanation_audio,
+                            "encouragement": encouragement_audio
+                        }
+                    else:
+                        self.logger.warning(
+                            "Some audio segments failed to generate")
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to generate voice for instructions: {str(e)}")
+
+            return instructions
 
         except Exception as e:
             self.logger.error(f"Error creating instructions: {str(e)}")
+            default_instructions = {
+                "greeting": f"Olá, {name}!",
+                "explanation": "Vamos praticar palavras legais hoje!",
+                "encouragement": "Vais arrasar!"
+            }
 
-        # Default fallback if all else fails
-        return {
-            "greeting": f"Olá, {name}!",
-            "explanation": "Vamos praticar palavras legais hoje!",
-            "encouragement": "Você vai arrasar!"
-        }
+            if self.voice_enabled:
+                try:
+                    default_instructions["audio"] = {
+                        "greeting": synthesize_speech(default_instructions["greeting"]),
+                        "explanation": synthesize_speech(default_instructions["explanation"]),
+                        "encouragement": synthesize_speech(default_instructions["encouragement"])
+                    }
+                except:
+                    self.logger.error(
+                        "Failed to generate voice for default instructions")
+
+            return default_instructions
 
     def provide_feedback(self, user_id: str, response: str) -> Dict[str, Any]:
         current_exercise = self.game_designer.get_current_exercise(user_id)
         if not current_exercise:
             self.logger.warning(f"No active game for user {user_id}")
-            return {"error": "Nenhum jogo ativo encontrado para este usuário"}
+            error_message = "Nenhum jogo ativo encontrado para este utilizador"
+            return {
+                "error": error_message,
+                "message": error_message,
+                "audio": synthesize_speech(error_message) if self.voice_enabled else None
+            }
 
         game_type = self.game_designer.current_games[user_id]["game_type"]
         expected = self._get_expected_word(current_exercise, game_type)
@@ -74,15 +131,24 @@ class TutorAgent:
         score = evaluation.get("score", 5)
         explanation = evaluation.get("explanation", "Avaliação padrão")
 
-        feedback = self._generate_feedback(score, explanation, expected)
+        feedback_text = self._generate_feedback(score, explanation, expected)
         self._update_user_progress(user_id, score)
 
-        return {
+        feedback = {
             "score": score,
-            "message": feedback,
+            "message": feedback_text,
             "correct": score >= 7,
             "next_exercise": self.game_designer.get_current_exercise(user_id) is not None
         }
+
+        # Add audio feedback if voice is enabled
+        if self.voice_enabled:
+            try:
+                feedback["audio"] = synthesize_speech(feedback_text)
+            except Exception as e:
+                self.logger.error(f"Error generating voice feedback: {str(e)}")
+
+        return feedback
 
     def _get_expected_word(self, exercise: Dict[str, Any], game_type: str) -> str:
         if game_type == "palavras cruzadas":
@@ -115,9 +181,9 @@ class TutorAgent:
                 evaluation = json.loads(response.choices[0].message.content)
             except Exception as e:
                 self.logger.error(f"Error with gpt-4o-mini: {str(e)}")
-                # Fallback to gpt-3.5-turbo without response_format
+                # Fallback to gpt-4o-mini without response_format
                 response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "Você é um assistente de terapia da fala. Avalie a precisão da pronúncia."},
                         {"role": "user", "content": (

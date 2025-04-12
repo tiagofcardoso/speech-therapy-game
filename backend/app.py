@@ -1270,87 +1270,65 @@ def evaluate_pronunciation(user_id):
 
             if result.returncode == 0:
                 print(f"Arquivo convertido com sucesso para WAV: {wav_path}")
-                # Use o arquivo WAV convertido para reconhecimento
                 recognized_text = recognize_speech(wav_path)
             else:
                 print("Falha ao converter áudio. Tentando reconhecimento direto.")
                 recognized_text = recognize_speech(temp_path)
         except Exception as e:
             print(f"Erro ao converter áudio: {e}")
-            # Tente usar o arquivo original se a conversão falhar
             recognized_text = recognize_speech(temp_path)
 
         print(f"Texto reconhecido: '{recognized_text}'")
         print(
             f"Comparação: Esperado='{expected_word}' | Reconhecido='{recognized_text}'")
 
-        # 3. Se o reconhecimento falhar, trate isso com elegância
+        # 3. Se o reconhecimento falhar, fornecer feedback genérico com voz
         if not recognized_text:
             print("AVISO: Texto não reconhecido pelo STT")
+            feedback_message = "Não consegui entender o que disseste. Por favor, tenta novamente falando mais claramente."
+
+            # Gerar áudio para o feedback
+            feedback_audio = synthesize_speech(feedback_message)
+
             return jsonify({
                 "success": True,
                 "isCorrect": False,
                 "score": 3,
                 "recognized_text": "",
-                "feedback": "Não consegui entender o que disseste. Por favor, tenta novamente falando mais claramente."
+                "feedback": feedback_message,
+                "audio_feedback": feedback_audio
             })
 
-        # 4. Se o reconhecimento funcionou, compare com a palavra esperada
-        # Calcular uma pontuação básica de similaridade
-        similarity_ratio = calculate_similarity(
-            recognized_text.lower(), expected_word.lower())
-        # Converter para escala de 0-10
-        similarity_score = int(similarity_ratio * 10)
-        is_correct = similarity_score >= 7
+        # 4. Avaliar a pronúncia usando o speech evaluator
+        from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
+        evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
 
         print(
-            f"Comparação de similaridade: {similarity_ratio:.2f} (pontuação: {similarity_score}/10)")
+            f"Iniciando avaliação de pronúncia para: '{recognized_text}' (esperado: '{expected_word}')")
+        evaluation = evaluator.evaluate_pronunciation(
+            spoken_text=recognized_text,
+            expected_word=expected_word,
+            hint=f"Foca na pronúncia correta do som em '{expected_word}'"
+        )
 
-        # 5. Usar o avaliador de pronúncia se estiver disponível
-        try:
-            from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
-            evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
+        # 5. Gerar feedback detalhado
+        accuracy_score = evaluation.get("accuracy_score", 5)
+        is_correct = accuracy_score >= 7  # Considerar correto se score >= 7
+        matched_sounds = evaluation.get("matched_sounds", [])
+        challenging_sounds = evaluation.get("challenging_sounds", [])
+        detailed_feedback = evaluation.get("detailed_feedback", "")
 
-            evaluation = evaluator.evaluate_pronunciation(
-                spoken_text=recognized_text,
-                expected_word=expected_word,
-                hint=f"Foque na pronúncia correta em '{expected_word}'"
-            )
-
-            accuracy_score = evaluation.get("accuracy_score", similarity_score)
-            detailed_feedback = evaluation.get("detailed_feedback", "")
-            matched_sounds = evaluation.get("matched_sounds", [])
-            challenging_sounds = evaluation.get("challenging_sounds", [])
-
-            # Atualizar a decisão de correção com base na avaliação da IA
-            is_correct = accuracy_score >= 7
-        except Exception as e:
-            print(f"Erro ao usar o avaliador de pronúncia: {e}")
-            # Usar os valores de similaridade calculados anteriormente como fallback
-            accuracy_score = similarity_score
-            detailed_feedback = "Análise detalhada não disponível."
-            matched_sounds = []
-            challenging_sounds = []
-
-        # 6. Gerar feedback personalizado com base no resultado
-        if is_correct:
-            feedback_message = f"Excelente! Pronunciaste '{expected_word}' corretamente."
-        else:
-            if similarity_score > 4:
-                feedback_message = f"Quase lá! Tenta focar-te mais nos sons '{', '.join(challenging_sounds)}' em '{expected_word}'."
-            else:
-                feedback_message = f"Tenta novamente. Pronuncia '{expected_word}' mais devagar."
+        # 6. Gerar feedback em áudio
+        audio_feedback = synthesize_speech(detailed_feedback)
 
         # 7. Limpar arquivos temporários
         try:
             os.remove(temp_path)
             if 'wav_path' in locals() and os.path.exists(wav_path):
                 os.remove(wav_path)
-            print("Arquivos temporários removidos")
         except Exception as e:
             print(f"Erro ao remover arquivos temporários: {e}")
 
-        # 8. Retornar resultado da avaliação
         return jsonify({
             "success": True,
             "isCorrect": is_correct,
@@ -1358,7 +1336,8 @@ def evaluate_pronunciation(user_id):
             "recognized_text": recognized_text,
             "matched_sounds": matched_sounds,
             "challenging_sounds": challenging_sounds,
-            "feedback": detailed_feedback or feedback_message
+            "feedback": detailed_feedback,
+            "audio_feedback": audio_feedback
         })
 
     except Exception as e:

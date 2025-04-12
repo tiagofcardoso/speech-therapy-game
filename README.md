@@ -9,6 +9,7 @@ An interactive application for speech therapy, developed to help children and ad
 - **Visual Feedback**: Audio visualization to show when the user is speaking
 - **Adaptation for European Portuguese**: Interface and content adapted for users in Portugal
 - **Progression System**: Tracking progress and adapting difficulty to the user's level
+- **Tutor Voice**: Spoken instructions and feedback using natural-sounding text-to-speech
 
 ## MCP (Model Context Protocol) Agent Architecture
 
@@ -17,7 +18,7 @@ The project uses an advanced MCP architecture with various specialized agents wo
 - **MCPCoordinator**: Orchestrates communication between agents and manages game sessions
 - **GameDesignerAgent**: Responsible for creating customized games and exercises
 - **SpeechEvaluatorAgent**: Evaluates the user's pronunciation using AI models
-- **TutorAgent**: Provides pedagogical feedback and personalized instructions
+- **TutorAgent**: Provides pedagogical feedback and personalized instructions with voice output
 - **ProgressionManagerAgent**: Monitors user progress and adjusts difficulty
 
 This modular architecture allows dynamic generation of educational content adapted to the specific needs of each user.
@@ -28,7 +29,7 @@ This modular architecture allows dynamic generation of educational content adapt
 - **Backend**: Python, Flask
 - **Database**: MongoDB
 - **AI**: OpenAI API (GPT-4, GPT-4o-mini)
-- **Speech Processing**: Speech-to-Text, Text-to-Speech
+- **Speech Processing**: Speech-to-Text, Text-to-Speech (Microsoft Azure, Amazon Polly or Google TTS)
 
 ## Implementation Details
 

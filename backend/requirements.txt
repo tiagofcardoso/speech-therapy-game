@@ -42,3 +42,8 @@ cryptography==41.0.4  # For additional security features
 # Documentation
 sphinx==7.2.6  # For generating API documentation
 sphinx-rtd-theme==1.3.0  # ReadTheDocs theme for Sphinx
+
+# Additional TTS dependencies
+requests==2.31.0  # Para chamadas à API Azure TTS
+google-cloud-texttospeech==2.14.1  # Para Google TTS (opcional)
+boto3==1.34.11  # Para Amazon Polly (opcional)

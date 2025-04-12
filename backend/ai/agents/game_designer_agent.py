@@ -121,10 +121,10 @@ class GameDesignerAgent:
                 )
                 content_json = json.loads(response.choices[0].message.content)
             except Exception as e:
-                # Fall back to gpt-3.5-turbo without response_format parameter
-                self.logger.info(f"Falling back to gpt-3.5-turbo: {str(e)}")
+                # Fall back to gpt-4o-mini without response_format parameter
+                self.logger.info(f"Falling back to gpt-4o-mini: {str(e)}")
                 response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt +
@@ -137,7 +137,7 @@ class GameDesignerAgent:
                     content_json = json.loads(content_text)
                 except json.JSONDecodeError:
                     self.logger.warning(
-                        "Failed to parse JSON from gpt-3.5-turbo response")
+                        "Failed to parse JSON from gpt-4o-mini response")
                     return self._get_fallback_content(game_type, difficulty, age_group)
 
             required_keys = ["title", "description",
