@@ -325,6 +325,111 @@
     color: white;
 }
 
+.record-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: #9c27b0;
+    /* Cor igual ao botão "Surpreenda-me" */
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 15px auto;
+    width: fit-content;
+}
+
+.record-button:hover {
+    background-color: #3a5b8c;
+}
+
+.record-button.recording {
+    background-color: #d9534f;
+    animation: pulse 1.5s infinite;
+}
+
+.record-button.recording:hover {
+    background-color: #c9302c;
+}
+
+/* Efeitos de visualização de áudio */
+.audio-visualization {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    margin: 10px 0;
+}
+
+.audio-bar {
+    width: 4px;
+    height: 10px;
+    background-color: #9c27b0;
+    /* Cor igual ao botão "Surpreenda-me" */
+    border-radius: 2px;
+    transition: height 0.1s ease;
+}
+
+.audio-bar.active {
+    animation: sound-wave 0.5s infinite ease-in-out alternate;
+}
+
+@keyframes sound-wave {
+    0% {
+        height: 5px;
+    }
+
+    100% {
+        height: 30px;
+    }
+}
+
+/* Modificação do botão de gravação para incluir efeito de vibração */
+.record-button.speaking {
+    animation: vibrate 0.3s infinite alternate;
+}
+
+@keyframes vibrate {
+    0% {
+        transform: translateX(-1px) translateY(0px);
+    }
+
+    25% {
+        transform: translateX(0px) translateY(-1px);
+    }
+
+    50% {
+        transform: translateX(1px) translateY(0px);
+    }
+
+    75% {
+        transform: translateX(0px) translateY(1px);
+    }
+
+    100% {
+        transform: translateX(-1px) translateY(0px);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);

@@ -150,9 +150,9 @@ class MCPCoordinator:
                 "session_complete": session_complete,
                 "feedback": {
                     "praise": feedback["message"],
-                    "correction": None if is_correct else f"Tente dizer a palavra novamente",
-                    "tip": "Fale devagar" if not is_correct else "Ótima pronúncia!",
-                    "encouragement": "Continue assim!"
+                    "correction": None if is_correct else f"Tenta dizer a palavra novamente",
+                    "tip": "Fala devagar" if not is_correct else "Excelente pronúncia!",
+                    "encouragement": "Continua assim!"
                 },
                 "current_exercise": next_exercise,
                 "repeat_exercise": not is_correct

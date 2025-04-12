@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { FaMicrophone, FaStop } from 'react-icons/fa';
 import './GamePlay.css';
 
 const GamePlay = () => {
@@ -10,10 +11,19 @@ const GamePlay = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-    const [userAnswer, setUserAnswer] = useState('');
     const [feedback, setFeedback] = useState(null);
     const [score, setScore] = useState(0);
     const [gameComplete, setGameComplete] = useState(false);
+    const [recording, setRecording] = useState(false);
+    const [audioBlob, setAudioBlob] = useState(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [audioVolume, setAudioVolume] = useState(0);
+    const [audioLevels, setAudioLevels] = useState(Array(10).fill(0));
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const audioAnalyzerRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserIntervalRef = useRef(null);
 
     useEffect(() => {
         // Fetch game data when component mounts
@@ -38,35 +48,147 @@ const GamePlay = () => {
         fetchGame();
     }, [gameId]);
 
-    const handleAnswerSubmit = async (e) => {
-        e.preventDefault();
-
-        if (!userAnswer.trim()) return;
-
+    const startRecording = async () => {
         try {
-            // In a real app, you'd send this to the backend for evaluation
-            // For now, we'll just simulate feedback
+            // Criar o AudioContext e a MediaStream
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
 
-            // Simple placeholder evaluation logic
+            // Configurar o analisador de áudio
+            const audioSource = audioContextRef.current.createMediaStreamSource(stream);
+            const analyser = audioContextRef.current.createAnalyser();
+            analyser.fftSize = 256;
+            audioSource.connect(analyser);
+            audioAnalyzerRef.current = analyser;
+
+            // Iniciar a análise de volume para detecção de fala
+            startVolumeAnalysis();
+
+            // Configuração do MediaRecorder
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    audioChunksRef.current.push(e.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                // Parar a análise quando a gravação parar
+                stopVolumeAnalysis();
+
+                // Criar o Blob e processar
+                const audioBlob = new Blob(audioChunksRef.current, {
+                    type: 'audio/webm'
+                });
+                setAudioBlob(audioBlob);
+                evaluateResponse(audioBlob);
+            };
+
+            mediaRecorder.start();
+            setRecording(true);
+        } catch (err) {
+            console.error("Erro ao acessar microfone:", err);
+            setError("Não foi possível acessar o microfone. Verifique as permissões.");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && recording) {
+            mediaRecorderRef.current.stop();
+            setRecording(false);
+            stopVolumeAnalysis();
+        }
+    };
+
+    // Função para iniciar a análise de volume
+    const startVolumeAnalysis = () => {
+        if (!audioAnalyzerRef.current) return;
+
+        const bufferLength = audioAnalyzerRef.current.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        // Atualizar a análise de volume a cada 100ms
+        analyserIntervalRef.current = setInterval(() => {
+            audioAnalyzerRef.current.getByteFrequencyData(dataArray);
+
+            // Calcular o volume médio
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
+            }
+            const avgVolume = sum / bufferLength;
+
+            // Atualizar o estado apenas se houver mudança significativa
+            if (Math.abs(avgVolume - audioVolume) > 2) {
+                setAudioVolume(avgVolume);
+            }
+
+            // Determinar se o usuário está falando (com threshold)
+            const speaking = avgVolume > 15; // Ajuste este valor conforme necessário
+            setIsSpeaking(speaking);
+
+            // Atualizar os níveis de áudio para visualização
+            const newLevels = Array(10).fill(0).map(() => {
+                return Math.min(1, Math.random() * (avgVolume / 50));
+            });
+            setAudioLevels(newLevels);
+
+        }, 100);
+    };
+
+    // Função para parar a análise de volume
+    const stopVolumeAnalysis = () => {
+        if (analyserIntervalRef.current) {
+            clearInterval(analyserIntervalRef.current);
+            analyserIntervalRef.current = null;
+        }
+        setIsSpeaking(false);
+        setAudioLevels(Array(10).fill(0));
+    };
+
+    const evaluateResponse = async (audioBlob) => {
+        try {
+            const formData = new FormData();
+            formData.append("audio", audioBlob);
+
             const currentExercise = getCurrentExercise();
-            const isCorrect = Math.random() > 0.3; // 70% chance of being "correct"
+            if (!currentExercise) {
+                console.error("No current exercise found");
+                setError("Erro: Não foi possível encontrar o exercício atual");
+                return;
+            }
+
+            console.log("Sending evaluation for word:", currentExercise.word);
+            formData.append("expected_word", currentExercise.word);
+
+            // Enviar para o backend para avaliação
+            const response = await api.post('/api/evaluate-pronunciation', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            console.log("Evaluation response:", response.data);
+
+            const { isCorrect, score, feedback, recognized_text } = response.data;
 
             setFeedback({
                 correct: isCorrect,
-                message: isCorrect
-                    ? "Muito bem! Sua resposta está correta."
-                    : "Tente novamente. Preste atenção na pronúncia."
+                message: feedback || (isCorrect
+                    ? "Muito bem! A tua pronúncia está correta."
+                    : "Tenta novamente. Presta atenção na pronúncia."),
+                recognizedText: recognized_text || "Texto não reconhecido"
             });
 
             if (isCorrect) {
-                setScore(prev => prev + 10);
+                setScore(prev => prev + score);
             }
-
-            // Clear answer after feedback
-            setUserAnswer('');
-
         } catch (err) {
-            setError("Erro ao avaliar resposta: " + err.message);
+            console.error("Erro ao avaliar pronúncia:", err);
+            setError("Erro ao avaliar sua resposta: " + (err.response?.data?.message || err.message));
         }
     };
 
@@ -87,6 +209,52 @@ const GamePlay = () => {
 
     const returnToDashboard = () => {
         navigate('/dashboard');
+    };
+
+    const AudioVisualization = () => {
+        return (
+            <div className="audio-visualization">
+                {audioLevels.map((level, index) => (
+                    <div
+                        key={index}
+                        className={`audio-bar ${isSpeaking ? 'active' : ''}`}
+                        style={{
+                            height: isSpeaking ? `${10 + level * 30}px` : '10px',
+                        }}
+                    />
+                ))}
+            </div>
+        );
+    };
+
+    const renderRecordingButton = () => {
+        return (
+            <div className="recording-controls">
+                <button
+                    onClick={recording ? stopRecording : startRecording}
+                    className={`record-button ${recording ? 'recording' : ''} ${isSpeaking && recording ? 'speaking' : ''}`}
+                >
+                    {recording ? (
+                        <>
+                            <FaStop /> Parar Gravação
+                        </>
+                    ) : (
+                        <>
+                            <FaMicrophone /> Iniciar Gravação
+                        </>
+                    )}
+                </button>
+
+                {recording && <AudioVisualization />}
+
+                <p className="recording-instruction">
+                    {recording
+                        ? "A falar... Clica em parar quando terminares."
+                        : "Clica para iniciar a gravação e pronuncia a palavra."
+                    }
+                </p>
+            </div>
+        );
     };
 
     if (loading) {
@@ -198,6 +366,13 @@ const GamePlay = () => {
                 {feedback ? (
                     <div className={`feedback-container ${feedback.correct ? 'correct' : 'incorrect'}`}>
                         <p>{feedback.message}</p>
+
+                        {feedback.recognizedText && (
+                            <div className="recognition-result">
+                                <p><strong>Texto reconhecido:</strong> {feedback.recognizedText || "Nenhum texto reconhecido"}</p>
+                            </div>
+                        )}
+
                         <button
                             onClick={moveToNextExercise}
                             className="next-exercise-button"
@@ -206,21 +381,7 @@ const GamePlay = () => {
                         </button>
                     </div>
                 ) : (
-                    <form onSubmit={handleAnswerSubmit} className="answer-form">
-                        <div className="input-group">
-                            <label htmlFor="userAnswer">Sua resposta:</label>
-                            <input
-                                type="text"
-                                id="userAnswer"
-                                value={userAnswer}
-                                onChange={(e) => setUserAnswer(e.target.value)}
-                                placeholder="Digite ou fale sua resposta..."
-                            />
-                        </div>
-                        <button type="submit" className="submit-answer">
-                            Enviar Resposta
-                        </button>
-                    </form>
+                    renderRecordingButton()
                 )}
             </div>
 

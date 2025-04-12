@@ -28,7 +28,7 @@ class TutorAgent:
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system",
-                            "content": "Você é um terapeuta da fala amigável."},
+                            "content": "És um terapeuta da fala amigável."},
                         {"role": "user", "content": prompt}
                     ],
                     response_format={"type": "json_object"}
@@ -104,10 +104,10 @@ class TutorAgent:
                 response = self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "Você é um assistente de terapia da fala. Avalie a precisão da pronúncia."},
+                        {"role": "system", "content": "És um assistente de terapia da fala. Avalia a precisão da pronúncia."},
                         {"role": "user", "content": (
-                            f"Palavra esperada: '{expected}'. Pronúncia do usuário: '{actual}'. "
-                            "Retorne um JSON com 'score' (1-10) e 'explanation' (string explicando o score)."
+                            f"Palavra esperada: '{expected}'. Pronúncia do utilizador: '{actual}'. "
+                            "Retorna um JSON com 'score' (1-10) e 'explanation' (string explicando o score)."
                         )}
                     ],
                     response_format={"type": "json_object"}
@@ -145,17 +145,18 @@ class TutorAgent:
             response = self.client.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    {"role": "system", "content": "Você é um terapeuta da fala amigável. Forneça feedback encorajador."},
+                    {"role": "system", "content": "És um terapeuta da fala amigável. Fornece feedback encorajador em português europeu."},
                     {"role": "user", "content": (
-                        f"Dê feedback encorajador para alguém que tentou dizer '{expected}'. "
-                        f"Avaliação: score={score}, explicação={explanation}"
+                        f"Dá feedback encorajador para alguém que tentou dizer '{expected}'. "
+                        f"Avaliação: score={score}, explicação={explanation}. "
+                        f"Usa português europeu (de Portugal, não do Brasil)."
                     )}
                 ]
             )
             return response.choices[0].message.content
         except Exception as e:
             self.logger.error(f"Error generating feedback: {str(e)}")
-            return f"Ótima tentativa com '{expected}'! Vamos praticar mais."
+            return f"Excelente tentativa com '{expected}'! Vamos praticar mais."
 
     def _update_user_progress(self, user_id: str, score: int):
         if user_id not in self.user_sessions:

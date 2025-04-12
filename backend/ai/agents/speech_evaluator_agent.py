@@ -1,12 +1,16 @@
+from typing import Dict, List, Any
+import json
+
+
 class SpeechEvaluatorAgent:
     """Agent responsible for evaluating speech pronunciation"""
-    
+
     def __init__(self, client):
         self.client = client
-    
+
     def evaluate_pronunciation(self, spoken_text: str, expected_word: str, hint: str) -> Dict:
         """Evaluate how well the spoken text matches the expected word"""
-        
+
         tools = [
             {
                 "type": "function",
@@ -40,13 +44,13 @@ class SpeechEvaluatorAgent:
                 }
             }
         ]
-        
-        system_prompt = """You are an expert speech pathologist who specializes in evaluating children's pronunciation.
-        Assess how closely the child's spoken text matches the expected word.
-        Be detailed in your analysis of specific sounds and phonemes.
-        Be encouraging but honest about areas that need improvement.
-        """
-        
+
+        system_prompt = """És um patologista da fala especializado na avaliação da pronúncia de crianças.
+Avalia quão próxima está a fala da criança da palavra esperada.
+Sê detalhado na tua análise de sons específicos e fonemas.
+Sê encorajador mas honesto sobre as áreas que necessitam de melhorias.
+"""
+
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4",
@@ -55,19 +59,20 @@ class SpeechEvaluatorAgent:
                     {"role": "user", "content": f"Expected word: '{expected_word}'\nSpoken text: '{spoken_text}'\nPronunciation hint: {hint}\n\nProvide a detailed evaluation of the child's pronunciation."}
                 ],
                 tools=tools,
-                tool_choice={"type": "function", "function": {"name": "provide_evaluation"}}
+                tool_choice={"type": "function", "function": {
+                    "name": "provide_evaluation"}}
             )
-            
+
             message = response.choices[0].message
             tool_calls = message.tool_calls
-            
+
             if tool_calls:
                 evaluation = json.loads(tool_calls[0].function.arguments)
                 return evaluation
-            
+
         except Exception as e:
             print(f"Error evaluating pronunciation: {e}")
-        
+
         # Fallback evaluation
         return {
             "accuracy_score": 5,

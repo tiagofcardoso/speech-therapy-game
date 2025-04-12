@@ -154,23 +154,33 @@ class GameDesignerAgent:
             return self._get_fallback_content(game_type, difficulty, age_group)
 
     def _create_system_prompt(self, game_type: str, difficulty: str, age_group: str) -> str:
-        base_prompt = f"""Você é um especialista em terapia da fala para {age_group} falantes de português.
+        base_prompt = f"""És um especialista em terapia da fala para {age_group} falantes de português.
 
 # CONTEXTO
-Você está criando jogos para uma aplicação de terapia da fala que ajuda {age_group} a melhorar suas habilidades de comunicação.
+Estás a criar jogos para uma aplicação de terapia da fala que ajuda {age_group} a melhorar as suas competências de comunicação.
 O jogo deve ser adequado para o nível de dificuldade '{difficulty}' e focar no tipo '{game_type}'.
 
 # FORMATO DE SAÍDA
-Responda com um objeto JSON contendo:
+Responde com um objeto JSON contendo:
 - "title": título criativo do jogo
 - "description": breve descrição do objetivo
 - "instructions": lista de instruções claras
 - "exercises": lista com 5 exercícios específicos
-- "target_skills": lista de habilidades desenvolvidas
+- "target_skills": lista de competências desenvolvidas
 - "target_sound": som-alvo do jogo (ex.: "s", "r")
 - "estimated_duration": tempo estimado (ex.: "5-10 minutos")
 """
 
+        # Para exercícios de pronúncia, adicionar:
+        """
+# TIPO: EXERCÍCIOS DE PRONÚNCIA
+Cada exercício DEVE ter EXATAMENTE os seguintes campos:
+- "word": uma palavra em português para praticar
+- "tip": uma dica para ajudar na pronúncia
+- "difficulty": nível da palavra de 1-3
+
+Certifica-te que cada exercício tem exatamente esta estrutura sem campos adicionais.
+"""
         # For pronunciation exercises, ensure a consistent format
         if game_type == "exercícios de pronúncia":
             return base_prompt + """

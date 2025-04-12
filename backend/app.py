@@ -5,12 +5,15 @@ import datetime
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import logging
+import traceback  # Adicionar importação do traceback
+import time  # Adicionar importação do time
+import uuid
+import base64
+import tempfile
 # Import app instance and JWT_SECRET_KEY from config
 from config import DEBUG, OPENAI_API_KEY, app, JWT_SECRET_KEY
 from bson import ObjectId
 from flask.json import JSONEncoder
-import tempfile
-import base64
 import jwt
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
@@ -23,6 +26,7 @@ from auth.auth_service import AuthService
 from auth.auth_middleware import token_required
 from database.db_connector import DatabaseConnector
 from dotenv import load_dotenv
+from openai import OpenAI
 
 from pathlib import Path
 # Add project root to Python path
@@ -1230,6 +1234,163 @@ def calculate_average_score(user):
         return 0
 
     return sum(session.get("score", 0) for session in completed_sessions) / len(completed_sessions)
+
+
+@app.route('/api/evaluate-pronunciation', methods=['POST'])
+@token_required
+def evaluate_pronunciation(user_id):
+    try:
+        if 'audio' not in request.files:
+            return jsonify({"success": False, "message": "Nenhum arquivo de áudio encontrado"}), 400
+
+        audio_file = request.files['audio']
+        expected_word = request.form.get('expected_word', '')
+
+        if not expected_word:
+            return jsonify({"success": False, "message": "Palavra esperada não fornecida"}), 400
+
+        # Mostrar informações sobre o arquivo recebido para debug
+        print(
+            f"Arquivo de áudio recebido: {audio_file.filename}, tipo MIME: {audio_file.content_type}")
+        print(f"Palavra esperada: '{expected_word}'")
+
+        # 1. Salvar o arquivo de áudio temporariamente
+        temp_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.webm"
+        audio_file.save(temp_path)
+        print(f"Arquivo de áudio salvo em: {temp_path}")
+
+        # 2. Converter o arquivo WebM para WAV usando FFmpeg se disponível
+        try:
+            import subprocess
+            wav_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.wav"
+            result = subprocess.run([
+                'ffmpeg', '-i', temp_path, '-acodec', 'pcm_s16le',
+                '-ar', '16000', '-ac', '1', wav_path
+            ], capture_output=True)
+
+            if result.returncode == 0:
+                print(f"Arquivo convertido com sucesso para WAV: {wav_path}")
+                # Use o arquivo WAV convertido para reconhecimento
+                recognized_text = recognize_speech(wav_path)
+            else:
+                print("Falha ao converter áudio. Tentando reconhecimento direto.")
+                recognized_text = recognize_speech(temp_path)
+        except Exception as e:
+            print(f"Erro ao converter áudio: {e}")
+            # Tente usar o arquivo original se a conversão falhar
+            recognized_text = recognize_speech(temp_path)
+
+        print(f"Texto reconhecido: '{recognized_text}'")
+        print(
+            f"Comparação: Esperado='{expected_word}' | Reconhecido='{recognized_text}'")
+
+        # 3. Se o reconhecimento falhar, trate isso com elegância
+        if not recognized_text:
+            print("AVISO: Texto não reconhecido pelo STT")
+            return jsonify({
+                "success": True,
+                "isCorrect": False,
+                "score": 3,
+                "recognized_text": "",
+                "feedback": "Não consegui entender o que disseste. Por favor, tenta novamente falando mais claramente."
+            })
+
+        # 4. Se o reconhecimento funcionou, compare com a palavra esperada
+        # Calcular uma pontuação básica de similaridade
+        similarity_ratio = calculate_similarity(
+            recognized_text.lower(), expected_word.lower())
+        # Converter para escala de 0-10
+        similarity_score = int(similarity_ratio * 10)
+        is_correct = similarity_score >= 7
+
+        print(
+            f"Comparação de similaridade: {similarity_ratio:.2f} (pontuação: {similarity_score}/10)")
+
+        # 5. Usar o avaliador de pronúncia se estiver disponível
+        try:
+            from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
+            evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
+
+            evaluation = evaluator.evaluate_pronunciation(
+                spoken_text=recognized_text,
+                expected_word=expected_word,
+                hint=f"Foque na pronúncia correta em '{expected_word}'"
+            )
+
+            accuracy_score = evaluation.get("accuracy_score", similarity_score)
+            detailed_feedback = evaluation.get("detailed_feedback", "")
+            matched_sounds = evaluation.get("matched_sounds", [])
+            challenging_sounds = evaluation.get("challenging_sounds", [])
+
+            # Atualizar a decisão de correção com base na avaliação da IA
+            is_correct = accuracy_score >= 7
+        except Exception as e:
+            print(f"Erro ao usar o avaliador de pronúncia: {e}")
+            # Usar os valores de similaridade calculados anteriormente como fallback
+            accuracy_score = similarity_score
+            detailed_feedback = "Análise detalhada não disponível."
+            matched_sounds = []
+            challenging_sounds = []
+
+        # 6. Gerar feedback personalizado com base no resultado
+        if is_correct:
+            feedback_message = f"Excelente! Pronunciaste '{expected_word}' corretamente."
+        else:
+            if similarity_score > 4:
+                feedback_message = f"Quase lá! Tenta focar-te mais nos sons '{', '.join(challenging_sounds)}' em '{expected_word}'."
+            else:
+                feedback_message = f"Tenta novamente. Pronuncia '{expected_word}' mais devagar."
+
+        # 7. Limpar arquivos temporários
+        try:
+            os.remove(temp_path)
+            if 'wav_path' in locals() and os.path.exists(wav_path):
+                os.remove(wav_path)
+            print("Arquivos temporários removidos")
+        except Exception as e:
+            print(f"Erro ao remover arquivos temporários: {e}")
+
+        # 8. Retornar resultado da avaliação
+        return jsonify({
+            "success": True,
+            "isCorrect": is_correct,
+            "score": accuracy_score,
+            "recognized_text": recognized_text,
+            "matched_sounds": matched_sounds,
+            "challenging_sounds": challenging_sounds,
+            "feedback": detailed_feedback or feedback_message
+        })
+
+    except Exception as e:
+        print(f"Erro na avaliação de pronúncia: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"success": False, "message": f"Erro: {str(e)}"}), 500
+
+# Função auxiliar para calcular a similaridade entre textos
+
+
+def calculate_similarity(text1, text2):
+    """Calcula a similaridade entre dois textos usando a distância de Levenshtein"""
+    try:
+        from rapidfuzz.distance import Levenshtein
+        # Normalizar para pontuação entre 0 e 1
+        max_len = max(len(text1), len(text2))
+        if max_len == 0:
+            return 0
+        distance = Levenshtein.distance(text1, text2)
+        return max(0, 1 - (distance / max_len))
+    except ImportError:
+        # Fallback simples se rapidfuzz não estiver disponível
+        if text1 == text2:
+            return 1.0
+        # Verificar se uma string está na outra
+        if text1 in text2 or text2 in text1:
+            shortest = min(len(text1), len(text2))
+            longest = max(len(text1), len(text2))
+            return shortest / longest
+        # Verificar a correspondência simples de caracteres
+        common_chars = sum(1 for c in text1 if c in text2)
+        return common_chars / max(len(text1), len(text2))
 
 
 if __name__ == "__main__":
