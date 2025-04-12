@@ -21,22 +21,45 @@ class TutorAgent:
         age = user_profile.get("age", 7)
         try:
             prompt = f"Crie instruções em português para {name}, {age} anos, nível {difficulty}. Retorne JSON com 'greeting', 'explanation', 'encouragement'."
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "Você é um terapeuta da fala amigável."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format={"type": "json_object"}
-            )
-            return json.loads(response.choices[0].message.content)
+
+            # Try with gpt-4o-mini first
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system",
+                            "content": "Você é um terapeuta da fala amigável."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                return json.loads(response.choices[0].message.content)
+            except Exception as e:
+                self.logger.warning(f"Error with gpt-4o-mini: {str(e)}")
+                # Fallback to gpt-3.5-turbo
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system",
+                            "content": "Você é um terapeuta da fala amigável."},
+                        {"role": "user", "content": prompt +
+                            " Responda apenas com o objeto JSON, sem texto adicional."}
+                    ]
+                )
+                try:
+                    return json.loads(response.choices[0].message.content)
+                except json.JSONDecodeError:
+                    self.logger.warning("Failed to parse JSON from response")
+
         except Exception as e:
             self.logger.error(f"Error creating instructions: {str(e)}")
-            return {
-                "greeting": f"Olá, {name}!",
-                "explanation": "Vamos praticar palavras legais hoje!",
-                "encouragement": "Você vai arrasar!"
-            }
+
+        # Default fallback if all else fails
+        return {
+            "greeting": f"Olá, {name}!",
+            "explanation": "Vamos praticar palavras legais hoje!",
+            "encouragement": "Você vai arrasar!"
+        }
 
     def provide_feedback(self, user_id: str, response: str) -> Dict[str, Any]:
         current_exercise = self.game_designer.get_current_exercise(user_id)
@@ -76,18 +99,40 @@ class TutorAgent:
 
     def _evaluate_pronunciation(self, actual: str, expected: str) -> Dict[str, Any]:
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "Você é um assistente de terapia da fala. Avalie a precisão da pronúncia."},
-                    {"role": "user", "content": (
-                        f"Palavra esperada: '{expected}'. Pronúncia do usuário: '{actual}'. "
-                        "Retorne um JSON com 'score' (1-10) e 'explanation' (string explicando o score)."
-                    )}
-                ],
-                response_format={"type": "json_object"}
-            )
-            evaluation = json.loads(response.choices[0].message.content)
+            # Try with gpt-4o-mini which supports response_format
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "Você é um assistente de terapia da fala. Avalie a precisão da pronúncia."},
+                        {"role": "user", "content": (
+                            f"Palavra esperada: '{expected}'. Pronúncia do usuário: '{actual}'. "
+                            "Retorne um JSON com 'score' (1-10) e 'explanation' (string explicando o score)."
+                        )}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                evaluation = json.loads(response.choices[0].message.content)
+            except Exception as e:
+                self.logger.error(f"Error with gpt-4o-mini: {str(e)}")
+                # Fallback to gpt-3.5-turbo without response_format
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "Você é um assistente de terapia da fala. Avalie a precisão da pronúncia."},
+                        {"role": "user", "content": (
+                            f"Palavra esperada: '{expected}'. Pronúncia do usuário: '{actual}'. "
+                            "Retorne um JSON com 'score' (1-10) e 'explanation' (string explicando o score). IMPORTANTE: responda somente o objeto JSON."
+                        )}
+                    ]
+                )
+                try:
+                    evaluation = json.loads(
+                        response.choices[0].message.content)
+                except json.JSONDecodeError:
+                    self.logger.warning("Failed to parse JSON response")
+                    return {"score": 5, "explanation": "Avaliação padrão devido a erro no processamento"}
+
             self.logger.info(
                 f"Pronunciation evaluation for {expected}: {evaluation}")
             return evaluation

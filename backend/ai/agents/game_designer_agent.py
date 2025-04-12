@@ -103,24 +103,45 @@ class GameDesignerAgent:
             user_prompt = (
                 f"Crie um jogo de terapia da fala do tipo '{game_type}' em português para {age_group}, "
                 f"nível '{difficulty}', focado no som '{target_sound}'. "
-                "Inclua um título criativo, descrição, instruções claras (em lista), 5 exercícios e metadados. "
-                "Retorne como um objeto JSON com as chaves: 'title', 'description', 'instructions' (lista), "
-                "'exercises' (lista), 'target_skills' (lista), 'target_sound' (string), 'estimated_duration' (string)."
+                "Inclua um título criativo, descrição, instruções claras (em lista), 5 exercícios e metadados."
             )
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=500
-            )
+            # Try to use gpt-4o-mini first, which supports response_format parameter
+            try:
+                self.logger.info(
+                    "Attempting to use gpt-4o-mini with JSON response format")
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    max_tokens=500
+                )
+                content_json = json.loads(response.choices[0].message.content)
+            except Exception as e:
+                # Fall back to gpt-3.5-turbo without response_format parameter
+                self.logger.info(f"Falling back to gpt-3.5-turbo: {str(e)}")
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt +
+                            " Responda com um objeto JSON."}
+                    ],
+                    max_tokens=1000
+                )
+                content_text = response.choices[0].message.content
+                try:
+                    content_json = json.loads(content_text)
+                except json.JSONDecodeError:
+                    self.logger.warning(
+                        "Failed to parse JSON from gpt-3.5-turbo response")
+                    return self._get_fallback_content(game_type, difficulty, age_group)
 
-            content_json = json.loads(response.choices[0].message.content)
             required_keys = ["title", "description",
-                             "instructions", "exercises", "target_sound"]
+                             "instructions", "exercises"]
             if not all(key in content_json for key in required_keys):
                 self.logger.warning(
                     "Incomplete OpenAI response. Using fallback.")
