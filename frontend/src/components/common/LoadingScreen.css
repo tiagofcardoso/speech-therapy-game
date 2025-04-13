@@ -1,0 +1,172 @@
+/* LoadingScreen.css */
+.loading-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: var(--background-color);
+    background-image: url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.1'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.loading-animation {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.character-container {
+    width: 120px;
+    height: 120px;
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.character {
+    width: 80px;
+    height: 80px;
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    animation: bounce 1.2s infinite alternate;
+}
+
+.face {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.eye {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background-color: white;
+    border-radius: 50%;
+    top: 25px;
+}
+
+.eye.left {
+    left: 20px;
+}
+
+.eye.right {
+    right: 20px;
+}
+
+.eye:after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background-color: #333;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    animation: blink 2.5s infinite;
+}
+
+.mouth {
+    position: absolute;
+    width: 30px;
+    height: 15px;
+    background-color: white;
+    border-radius: 0 0 15px 15px;
+    bottom: 20px;
+    left: 25px;
+    animation: talk 1s infinite;
+}
+
+.loading-bubbles {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.bubble {
+    width: 16px;
+    height: 16px;
+    background-color: var(--primary-light);
+    border-radius: 50%;
+    animation: bubble-float 1s infinite alternate;
+}
+
+.bubble:nth-child(2) {
+    animation-delay: 0.2s;
+    background-color: var(--secondary-color);
+}
+
+.bubble:nth-child(3) {
+    animation-delay: 0.4s;
+    background-color: var(--accent-color);
+}
+
+.loading-message {
+    font-family: 'Comic Neue', 'Nunito', sans-serif;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    margin-top: 1rem;
+    text-align: center;
+    animation: messageFloat 2s infinite alternate;
+}
+
+@keyframes bounce {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+
+    100% {
+        transform: translateY(-15px) scale(1.05);
+    }
+}
+
+@keyframes bubble-float {
+    0% {
+        transform: translateY(0);
+    }
+
+    100% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes blink {
+
+    0%,
+    90%,
+    100% {
+        transform: scale(1);
+    }
+
+    95% {
+        transform: scale(0.1);
+    }
+}
+
+@keyframes talk {
+
+    0%,
+    100% {
+        height: 10px;
+        width: 25px;
+        left: 27.5px;
+    }
+
+    50% {
+        height: 15px;
+        width: 30px;
+        left: 25px;
+    }
+}
+
+@keyframes messageFloat {
+    0% {
+        transform: translateY(0);
+    }
+
+    100% {
+        transform: translateY(-5px);
+    }
+}

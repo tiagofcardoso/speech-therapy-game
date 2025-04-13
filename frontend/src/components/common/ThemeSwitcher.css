@@ -1,0 +1,118 @@
+/* ThemeSwitcher.css */
+.theme-switcher {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+.theme-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    border: none;
+    transition: transform 0.3s, background-color 0.3s;
+}
+
+.theme-toggle:hover {
+    transform: rotate(45deg);
+    background-color: var(--primary-color);
+}
+
+.theme-panel {
+    position: absolute;
+    bottom: 55px;
+    left: 0;
+    width: 250px;
+    background-color: white;
+    border-radius: var(--border-radius-medium);
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    transform: scale(0.9);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+    transform-origin: bottom left;
+}
+
+.theme-switcher.open .theme-panel {
+    transform: scale(1);
+    opacity: 1;
+    visibility: visible;
+}
+
+.theme-panel h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--primary-color);
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+.theme-options {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 10px;
+}
+
+.theme-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: var(--border-radius-small);
+    background-color: #f5f5f5;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.theme-option:hover {
+    background-color: #e0e0e0;
+}
+
+.theme-option.active {
+    border-color: var(--primary-color);
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+}
+
+.theme-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.theme-option[data-theme="default"] .theme-color {
+    background-color: #6200ea;
+}
+
+.theme-option[data-theme="ocean"] .theme-color {
+    background-color: #0277bd;
+}
+
+.theme-option[data-theme="forest"] .theme-color {
+    background-color: #2e7d32;
+}
+
+.theme-option[data-theme="candy"] .theme-color {
+    background-color: #d81b60;
+}
+
+.theme-option[data-theme="space"] .theme-color {
+    background-color: #311b92;
+}
+
+.theme-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}

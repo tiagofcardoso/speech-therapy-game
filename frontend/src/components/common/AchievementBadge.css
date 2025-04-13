@@ -1,0 +1,84 @@
+/* AchievementBadge.css */
+.achievement-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background-color: rgba(var(--primary-color-rgb), 0.1);
+    border-radius: 30px;
+    margin-right: 8px;
+    border: 1px solid rgba(var(--primary-color-rgb), 0.2);
+    transition: transform 0.2s;
+}
+
+.achievement-badge:hover {
+    transform: translateY(-2px);
+}
+
+.achievement-icon {
+    margin-right: 6px;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.achievement-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Variações de cores */
+.achievement-badge.gold {
+    background-color: rgba(255, 215, 0, 0.15);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+
+.achievement-badge.gold .achievement-icon {
+    color: #ff9800;
+}
+
+.achievement-badge.silver {
+    background-color: rgba(192, 192, 192, 0.15);
+    border-color: rgba(192, 192, 192, 0.3);
+}
+
+.achievement-badge.silver .achievement-icon {
+    color: #607d8b;
+}
+
+.achievement-badge.bronze {
+    background-color: rgba(205, 127, 50, 0.15);
+    border-color: rgba(205, 127, 50, 0.3);
+}
+
+.achievement-badge.bronze .achievement-icon {
+    color: #8d6e63;
+}
+
+.achievement-badge.green {
+    background-color: rgba(var(--secondary-color-rgb, 0, 230, 118), 0.15);
+}
+
+.achievement-badge.green .achievement-icon {
+    color: var(--secondary-color);
+}
+
+.achievement-badge.orange {
+    background-color: rgba(var(--accent-color-rgb, 255, 145, 0), 0.15);
+}
+
+.achievement-badge.orange .achievement-icon {
+    color: var(--accent-color);
+}
+
+@media (max-width: 576px) {
+    .achievement-badge {
+        padding: 3px 8px;
+    }
+
+    .achievement-label {
+        font-size: 0.75rem;
+    }
+}

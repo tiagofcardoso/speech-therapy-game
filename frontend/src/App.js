@@ -1,43 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import Exercise from './pages/Exercise';  // Importe o novo componente
+import Exercise from './pages/Exercise';
 import PrivateRoute from './components/PrivateRoute';
 import MCPGameGenerator from './components/MCPGameGenerator';
-import GigiGameGenerator from './components/GigiGameGenerator'; // Import the GigiGameGenerator component
-import GamePlay from './components/GamePlay'; // Import the GamePlay component
+import GigiGameGenerator from './components/GigiGameGenerator';
+import GamePlay from './components/GamePlay';
+import LoadingScreen from './components/common/LoadingScreen';
+import AccessibilityControls from './components/common/AccessibilityControls';
+import ThemeSwitcher from './components/common/ThemeSwitcher';
+import ThemeProvider from './context/ThemeContext';
+import { ToastProvider } from './components/common/SimpleToast';
+import axios from 'axios';
 import './App.css';
-import axios from 'axios'; // Import axios
 
-// Add to your api.js
+// Token refresh e interceptors
 axios.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
 
-    // If the error is due to an expired token (usually 401)
-    if (error.response.status === 401 && !originalRequest._retry) {
+    // Se o erro for devido a um token expirado (geralmente 401)
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
-        // Call your refresh token endpoint
+        // Chamada para endpoint de refresh token
         const refreshResponse = await axios.post('/api/auth/refresh', {
           refresh_token: localStorage.getItem('refresh_token')
         });
 
-        // Store the new token
+        // Armazena o novo token
         const { token } = refreshResponse.data;
         localStorage.setItem('token', token);
 
-        // Update the authorization header
+        // Atualiza o cabeçalho de autorização
         originalRequest.headers.Authorization = `Bearer ${token}`;
 
-        // Retry the original request
+        // Tenta a requisição original novamente
         return axios(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, redirect to login
+        // Se o refresh falhar, redireciona para login
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -48,50 +53,71 @@ axios.interceptors.response.use(
 );
 
 function App() {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simula carregamento inicial de recursos
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return <LoadingScreen message="Carregando sua aventura de aprendizagem..." />;
+  }
+
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/mcp-games" element={<MCPGameGenerator />} />
-          <Route path="/gigi-games" element={<GigiGameGenerator />} /> {/* Add this to your routes configuration */}
+    <ThemeProvider>
+      <ToastProvider>
+        <Router>
+          <div className="App">
+            <AccessibilityControls />
+            <ThemeSwitcher />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/mcp-games" element={<MCPGameGenerator />} />
+              <Route path="/gigi-games" element={<GigiGameGenerator />} />
 
-          {/* Rota para Dashboard */}
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
+              {/* Rota para Dashboard */}
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
+                  </PrivateRoute>
+                }
+              />
 
-          {/* Nova rota para os exercícios */}
-          <Route
-            path="/exercise/:exerciseId"
-            element={
-              <PrivateRoute>
-                <Exercise />
-              </PrivateRoute>
-            }
-          />
+              {/* Rota para exercícios */}
+              <Route
+                path="/exercise/:exerciseId"
+                element={
+                  <PrivateRoute>
+                    <Exercise />
+                  </PrivateRoute>
+                }
+              />
 
-          {/* Nova rota para jogar - agora com PrivateRoute */}
-          <Route
-            path="/play/:gameId"
-            element={
-              <PrivateRoute>
-                <GamePlay />
-              </PrivateRoute>
-            }
-          />
+              {/* Rota para jogar */}
+              <Route
+                path="/play/:gameId"
+                element={
+                  <PrivateRoute>
+                    <GamePlay />
+                  </PrivateRoute>
+                }
+              />
 
-          {/* Redirecionar para dashboard se o usuário tentar acessar a raiz */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </div>
-    </Router>
+              {/* Redirecionar para dashboard quando acessar a raiz */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </div>
+        </Router>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

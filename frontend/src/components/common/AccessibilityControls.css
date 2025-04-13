@@ -1,0 +1,158 @@
+/* AccessibilityControls.css */
+.accessibility-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    font-family: 'Nunito', sans-serif;
+}
+
+.accessibility-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    border: none;
+    transition: transform 0.3s, background-color 0.3s;
+}
+
+.accessibility-toggle:hover {
+    transform: rotate(15deg);
+    background-color: var(--primary-light);
+}
+
+.accessibility-content {
+    position: absolute;
+    top: 55px;
+    right: 0;
+    width: 280px;
+    background-color: white;
+    border-radius: var(--border-radius-medium);
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    transform: scale(0.9);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s;
+    transform-origin: top right;
+}
+
+.accessibility-panel.open .accessibility-content {
+    transform: scale(1);
+    opacity: 1;
+    visibility: visible;
+}
+
+.accessibility-content h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--primary-color);
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+.accessibility-option {
+    margin-bottom: 15px;
+}
+
+.accessibility-option label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.accessibility-option select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: var(--border-radius-small);
+    font-family: 'Nunito', sans-serif;
+    transition: border-color 0.2s;
+}
+
+.accessibility-option select:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.accessibility-option input[type="checkbox"] {
+    margin-right: 8px;
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+}
+
+.close-panel {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-small);
+    margin-top: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s;
+}
+
+.close-panel:hover {
+    background-color: var(--primary-dark);
+}
+
+/* Estilos para os diferentes tamanhos de fonte */
+.font-small {
+    font-size: 0.9rem;
+}
+
+.font-medium {
+    font-size: 1rem;
+}
+
+.font-large {
+    font-size: 1.2rem;
+}
+
+.font-extra-large {
+    font-size: 1.4rem;
+}
+
+/* Estilos para contraste alto */
+.contrast-high {
+    --primary-color: #0000EE;
+    --primary-light: #2020FF;
+    --primary-dark: #00008B;
+    --secondary-color: #008000;
+    --secondary-light: #00A000;
+    --secondary-dark: #006000;
+    --accent-color: #FF0000;
+    --background-color: #FFFFFF;
+    --surface-color: #FFFFFF;
+    --text-primary: #000000;
+    --text-secondary: #000000;
+}
+
+/* Desabilitar animações */
+.animations-disabled * {
+    animation: none !important;
+    transition: none !important;
+}
+
+@media (max-width: 768px) {
+    .accessibility-panel {
+        top: 10px;
+        right: 10px;
+    }
+
+    .accessibility-content {
+        width: 240px;
+    }
+}

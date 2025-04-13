@@ -1,0 +1,260 @@
+.progress-dashboard-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.progress-dashboard-container h1 {
+    margin-bottom: 25px;
+    color: #2c3e50;
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #1e88e5;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 1rem;
+}
+
+.card {
+    border-radius: 8px;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+    border: none;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    padding: 1rem 1.25rem;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #2c3e50;
+}
+
+.level-title {
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-bottom: 0.75rem;
+}
+
+.level-badge {
+    background-color: #4e73df;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 1rem;
+    text-transform: capitalize;
+}
+
+.level-message {
+    color: #6c757d;
+    margin-bottom: 1.25rem;
+}
+
+.level-icon-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.level-icon {
+    font-size: 4rem;
+    width: 80px;
+    height: 80px;
+    line-height: 80px;
+    border-radius: 50%;
+    background-color: #f8f9fc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.level-icon.beginner {
+    color: #28a745;
+}
+
+.level-icon.intermediate {
+    color: #fd7e14;
+}
+
+.level-icon.advanced {
+    color: #dc3545;
+}
+
+.level-requirement {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.level-progress {
+    margin-top: 1rem;
+}
+
+.stat-card {
+    height: 100%;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.stat-card h2 {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+    margin-bottom: 5px;
+}
+
+.stat-card p {
+    color: #6c757d;
+    margin-bottom: 0;
+}
+
+.chart-card {
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    height: 100%;
+}
+
+.chart-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px 20px;
+}
+
+.chart-title {
+    font-size: 1.25rem;
+    margin-bottom: 0;
+    color: #343a40;
+}
+
+.chart-card .card-body {
+    padding: 20px;
+    height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.focus-area-container {
+    width: 100%;
+}
+
+.focus-area {
+    margin-bottom: 15px;
+}
+
+.focus-area:last-child {
+    margin-bottom: 0;
+}
+
+.focus-area-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+
+.recommendation-item {
+    background-color: #f8f9fc;
+    padding: 1.25rem;
+    border-radius: 6px;
+    height: 100%;
+}
+
+.recommendation-item h4 {
+    color: #2c3e50;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #e3e6f0;
+    padding-bottom: 0.5rem;
+}
+
+.recommendation-list {
+    padding-left: 1.25rem;
+}
+
+.recommendation-list li {
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.recommendation-card {
+    height: 100%;
+    border-radius: 8px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.recommendation-card:hover {
+    transform: translateY(-3px);
+}
+
+.rec-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #007bff;
+}
+
+.recommendation-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.recommendation-card p {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+/* Ajustes para dispositivos móveis */
+@media (max-width: 767px) {
+    .stat-number {
+        font-size: 2rem;
+    }
+
+    .level-title {
+        font-size: 1.25rem;
+    }
+
+    .level-icon {
+        font-size: 3rem;
+        width: 60px;
+        height: 60px;
+        line-height: 60px;
+    }
+
+    .card-header h3 {
+        font-size: 1.1rem;
+    }
+
+    .chart-card .card-body {
+        height: 250px;
+    }
+
+    .stat-card {
+        margin-bottom: 15px;
+    }
+}

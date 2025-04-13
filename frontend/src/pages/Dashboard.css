@@ -1,341 +1,555 @@
+/* Dashboard.css - Redesenhado para interface infantil lúdica */
 .dashboard-container {
+    padding: var(--spacing-lg);
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Nunito', 'Comic Neue', sans-serif;
 }
 
+/* Header estilizado com elementos infantis */
 .dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eaeaea;
+    background-color: var(--surface-color);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--border-radius-large);
+    box-shadow: var(--box-shadow);
+    margin-bottom: var(--spacing-lg);
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(90deg,
+            var(--primary-color),
+            var(--secondary-color),
+            var(--accent-color),
+            var(--primary-color));
+    animation: rainbow 6s linear infinite;
+    background-size: 200% 100%;
+}
+
+@keyframes rainbow {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    100% {
+        background-position: 200% 50%;
+    }
+}
+
+.dashboard-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.dashboard-icon {
+    font-size: 1.8rem;
+    color: var(--primary-color);
+    animation: wiggle 3s ease-in-out infinite;
 }
 
 .dashboard-header h1 {
-    color: #2c3e50;
+    font-size: 1.8rem;
+    color: var(--primary-color);
     margin: 0;
+    font-weight: 800;
 }
 
-.user-info {
+.user-profile {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: var(--spacing-md);
 }
 
-.user-info h2 {
-    margin: 0;
-    color: #333;
-    font-size: 24px;
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16);
 }
 
-.user-info p {
-    margin: 5px 0 0;
-    color: #666;
+.user-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.user-badges {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-top: 4px;
 }
 
 .logout-button {
-    background-color: #e74c3c;
-    color: white;
+    background-color: #f5f5f5;
+    color: var(--text-secondary);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border: none;
-    border-radius: 4px;
-    padding: 8px 15px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s;
+    transition: all 0.2s;
+    font-size: 1rem;
 }
 
 .logout-button:hover {
-    background-color: #c0392b;
+    background-color: #e0e0e0;
+    transform: translateY(-2px);
 }
 
+/* Conteúdo do Dashboard com elementos lúdicos */
 .dashboard-content {
-    display: flex;
-    flex-direction: column;
-    gap: 30px;
+    display: grid;
+    gap: var(--spacing-lg);
 }
 
-.welcome-section,
-.exercises-section,
-.progress-section {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    padding: 20px;
+/* Seção de progresso com visual infantil */
+.progress-summary {
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-large);
+    padding: var(--spacing-lg);
+    box-shadow: var(--box-shadow);
 }
 
-.welcome-section h2 {
-    color: #2c3e50;
+.progress-summary h2 {
+    color: var(--primary-color);
     margin-top: 0;
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: 1.5rem;
+}
+
+.progress-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.progress-card {
+    background-color: #f9f9f9;
+    border-radius: var(--border-radius-medium);
+    padding: var(--spacing-md);
+    text-align: center;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+    transition: transform 0.3s;
+    cursor: pointer;
+}
+
+.progress-card:hover {
+    transform: translateY(-5px);
+}
+
+.progress-card-icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-sm);
+    animation: bounce 2s infinite;
+}
+
+.progress-card-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary-color);
+    margin-bottom: var(--spacing-xs);
+}
+
+.progress-card-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Estilo dos exercícios como "cards de aventura" */
+.exercises-section {
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-large);
+    padding: var(--spacing-lg);
+    box-shadow: var(--box-shadow);
+}
+
+.exercises-section h2 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: 1.5rem;
 }
 
 .exercises-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    gap: var(--spacing-md);
 }
 
 .exercise-card {
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    background-color: white;
+    border-radius: var(--border-radius-medium);
+    padding: var(--spacing-md);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
     position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
 }
 
-.exercise-card h3 {
-    margin-top: 0;
-    color: #2c3e50;
+.exercise-card:hover:not(.locked) {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
 }
 
 .exercise-card.beginner {
-    border-left: 4px solid #2ecc71;
+    border-left: 5px solid var(--secondary-color);
 }
 
 .exercise-card.intermediate {
-    border-left: 4px solid #3498db;
+    border-left: 5px solid var(--primary-color);
 }
 
 .exercise-card.advanced {
-    border-left: 4px solid #e74c3c;
+    border-left: 5px solid var(--accent-color);
 }
 
-/* Change MCP classes to Gigi classes */
 .exercise-card.gigi {
-    border-left: 4px solid #9c27b0;
-    background-color: #f3e5f5;
-    position: relative;
-    overflow: hidden;
+    border: none;
+    background: linear-gradient(135deg, #f5f7ff, #e6ecfd);
+    border-top: 5px solid var(--primary-color);
 }
 
-.exercise-card.gigi::after {
-    content: "";
+.exercise-card.gigi:before {
+    content: '';
     position: absolute;
     top: 0;
+    left: 0;
     right: 0;
     bottom: 0;
-    left: 0;
-    background: linear-gradient(45deg, transparent 65%, rgba(156, 39, 176, 0.1) 100%);
+    background: linear-gradient(45deg,
+            rgba(255, 255, 255, 0.5) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.5) 50%,
+            rgba(255, 255, 255, 0.5) 75%,
+            transparent 75%);
+    background-size: 20px 20px;
+    opacity: 0.3;
     pointer-events: none;
 }
 
-.gigi-icon {
-    margin-left: 10px;
-    color: #9c27b0;
+.exercise-card.locked {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
-.gigi-badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    font-size: 12px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    background-color: #9c27b0;
-    color: white;
+.exercise-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
 }
 
-.start-exercise-button.gigi-button {
-    background-color: #9c27b0;
+.exercise-icon {
+    font-size: 2rem;
+    animation: bounce 2s infinite;
 }
 
-.start-exercise-button.gigi-button:hover {
-    background-color: #7b1fa2;
+.exercise-card h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    flex-grow: 1;
+}
+
+.magic-icon {
+    color: var(--primary-color);
+    animation: sparkle 1.5s infinite;
+}
+
+@keyframes sparkle {
+
+    0%,
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2) rotate(10deg);
+        opacity: 0.8;
+    }
+}
+
+.exercise-difficulty {
+    margin-bottom: var(--spacing-sm);
 }
 
 .difficulty-badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    font-size: 12px;
-    padding: 3px 8px;
-    border-radius: 12px;
-    background-color: #f8f9fa;
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: bold;
 }
 
-.exercise-card.beginner .difficulty-badge {
-    background-color: #e8f5e9;
-    color: #2e7d32;
+.difficulty-badge.beginner {
+    background-color: rgba(0, 230, 118, 0.15);
+    color: var(--secondary-dark);
 }
 
-.exercise-card.intermediate .difficulty-badge {
-    background-color: #e3f2fd;
-    color: #1565c0;
+.difficulty-badge.intermediate {
+    background-color: rgba(98, 0, 234, 0.15);
+    color: var(--primary-dark);
 }
 
-.exercise-card.advanced .difficulty-badge {
-    background-color: #ffebee;
-    color: #c62828;
+.difficulty-badge.advanced {
+    background-color: rgba(255, 145, 0, 0.15);
+    color: #e65100;
 }
 
-.exercise-card p {
-    margin: 10px 0 15px;
-    color: #666;
-    line-height: 1.5;
+.gigi-badge {
+    background: linear-gradient(90deg, #9d46ff, #6200ea);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: inline-block;
 }
 
-.start-exercise-button {
-    background-color: #3498db;
+.exercise-description {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+    flex-grow: 1;
+}
+
+.exercise-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: auto;
+}
+
+.star-rating {
+    display: flex;
+    gap: 2px;
+    margin-bottom: var(--spacing-xs);
+}
+
+.star {
+    font-size: 1.2rem;
+    opacity: 0.3;
+}
+
+.star.filled {
+    opacity: 1;
+}
+
+.start-button {
+    background-color: var(--secondary-color);
     color: white;
     border: none;
-    border-radius: 4px;
-    padding: 8px 0;
+    border-radius: var(--border-radius-medium);
+    padding: 10px;
+    font-weight: bold;
     cursor: pointer;
-    width: 100%;
-    margin-top: 15px;
-    transition: background-color 0.3s;
+    transition: all 0.2s;
 }
 
-.start-exercise-button:hover {
-    background-color: #2980b9;
+.start-button:hover:not(.locked) {
+    background-color: var(--secondary-dark);
+    transform: translateY(-2px);
 }
 
-.progress-overview {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+.start-button.gigi-button {
+    background-color: var(--primary-color);
 }
 
-.progress-card {
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    padding: 15px;
-    text-align: center;
+.start-button.gigi-button:hover:not(.locked) {
+    background-color: var(--primary-dark);
 }
 
-.progress-card h3 {
-    font-size: 16px;
-    color: #666;
-    margin-top: 0;
+.start-button.locked {
+    background-color: #ccc;
+    cursor: not-allowed;
 }
 
-.progress-number {
-    font-size: 32px;
-    font-weight: bold;
-    color: #3498db;
-    margin: 10px 0 0;
-}
-
-.sessions-table-container {
-    overflow-x: auto;
-}
-
-.sessions-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.sessions-table th,
-.sessions-table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.sessions-table th {
-    background-color: #f9f9f9;
-    color: #333;
-    font-weight: bold;
-}
-
-.sessions-table tr:hover {
-    background-color: #f5f5f5;
-}
-
-.dashboard-loading {
+.lock-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.9);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    border-radius: var(--border-radius-medium);
 }
 
-.spinner {
-    border: 4px solid rgba(0, 0, 0, 0.1);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border-left-color: #4CAF50;
-    animation: spin 1s linear infinite;
-    margin-bottom: 15px;
+.lock-icon {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-sm);
 }
 
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-.dashboard-error {
+.lock-overlay p {
+    color: var(--text-secondary);
     text-align: center;
-    padding: 50px 20px;
-    max-width: 500px;
-    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
-.dashboard-error h2 {
-    color: #d32f2f;
-    margin-bottom: 15px;
+/* Estilo para o desafio diário */
+.daily-challenge {
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-large);
+    padding: var(--spacing-lg);
+    box-shadow: var(--box-shadow);
 }
 
-.dashboard-error button {
-    margin: 10px;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 4px;
-    background: #2196F3;
-    color: white;
-    cursor: pointer;
-}
-
-.nav-button {
-    display: inline-flex;
+.daily-challenge h2 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: var(--spacing-md);
+    display: flex;
     align-items: center;
-    padding: 8px 16px;
-    margin-right: 10px;
-    background-color: #3498db;
+    gap: var(--spacing-xs);
+    font-size: 1.5rem;
+}
+
+.challenge-card {
+    background: linear-gradient(135deg, #fff6e5, #fffaf0);
+    border-radius: var(--border-radius-medium);
+    padding: var(--spacing-md);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.challenge-card:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9 0h2v20H9V0zm25.134.84l1.732 1-10 17.32-1.732-1 10-17.32zm-20 20l1.732 1-10 17.32-1.732-1 10-17.32zM58.16 4.134l1 1.732-17.32 10-1-1.732 17.32-10zm-40 40l1 1.732-17.32 10-1-1.732 17.32-10zM80 9v2H60V9h20zM20 69v2H0v-2h20zm79.32-55l-1 1.732-17.32-10L82 4l17.32 10zm-80 80l-1 1.732-17.32-10L2 84l17.32 10zm95.32-65l-1 1.732-17.32-10L98 4l17.32 10zm-80 80l-1 1.732-17.32-10L18 84l17.32 10zM100 9v2H80V9h20zm19.32 65l-1 1.732-17.32-10L102 64l17.32 10zM40 109v2H20v-2h20zm60 0v2H80v-2h20zm19.32 5l-1 1.732-17.32-10 1-1.732 17.32 10zM39.32 84l-1 1.732-17.32-10 1-1.732 17.32 10zm40 40l-1 1.732-17.32-10 1-1.732 17.32 10zm-75.32-55l-1-1.732 17.32-10 1 1.732-17.32 10zm75.32 5l-1-1.732 17.32-10 1 1.732-17.32 10zM40 49v2H20v-2h20zm20 0v2H40v-2h20zm20 0v2H60v-2h20zm40 0v2H80v-2h20z' fill='%23FF9800' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
+    opacity: 0.5;
+}
+
+.challenge-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.challenge-icon {
+    font-size: 2.5rem;
+    animation: bounce 3s ease-in-out infinite;
+}
+
+.challenge-card h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: var(--accent-color);
+}
+
+.challenge-card p {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.word-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: var(--spacing-md);
+}
+
+.word-chip {
+    background-color: rgba(255, 145, 0, 0.15);
+    color: var(--accent-color);
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.challenge-button {
+    background-color: var(--accent-color);
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--border-radius-medium);
+    padding: 10px 15px;
+    font-weight: bold;
     cursor: pointer;
-    text-decoration: none;
-    font-size: 14px;
-    transition: background-color 0.3s;
+    transition: all 0.2s;
+    display: block;
+    width: 100%;
 }
 
-.nav-button:hover {
-    background-color: #2980b9;
+.challenge-button:hover {
+    background-color: #e65100;
+    transform: translateY(-2px);
 }
 
-.nav-button i {
-    margin-right: 8px;
+/* Responsividade para tablets e celulares */
+@media (max-width: 992px) {
+    .exercises-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
     .dashboard-header {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+        text-align: center;
     }
 
-    .user-info {
+    .user-profile {
         width: 100%;
-        justify-content: space-between;
+        justify-content: center;
     }
 
-    .stats-cards,
-    .exercises-cards {
+    .progress-cards {
         grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
     }
 
-    .logout-button {
-        margin-top: 15px;
+    .exercises-grid {
+        grid-template-columns: 1fr;
     }
 }
