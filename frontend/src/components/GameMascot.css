@@ -1,0 +1,125 @@
+.game-mascot-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin: 15px 0;
+}
+
+.game-mascot {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+    border-radius: 50%;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.mascot-emoji {
+    font-size: 50px;
+    line-height: 1;
+}
+
+.mascot-message {
+    background-color: #fff;
+    border: 2px solid #e1bee7;
+    border-radius: 20px;
+    padding: 10px 15px;
+    margin-top: 10px;
+    position: relative;
+    max-width: 200px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.mascot-message:before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 10px solid #e1bee7;
+}
+
+/* Animations */
+.game-mascot.idle {
+    animation: float 3s ease-in-out infinite;
+}
+
+.game-mascot.jump {
+    animation: jump 0.5s ease-in-out;
+}
+
+.game-mascot.dance {
+    animation: dance 1s ease-in-out;
+}
+
+.game-mascot.thinking {
+    animation: thinking 2s infinite;
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes jump {
+
+    0%,
+    100% {
+        transform: translateY(0) scale(1);
+    }
+
+    50% {
+        transform: translateY(-20px) scale(1.1);
+    }
+}
+
+@keyframes dance {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(-15deg);
+    }
+
+    75% {
+        transform: rotate(15deg);
+    }
+}
+
+@keyframes thinking {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}

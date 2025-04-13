@@ -4,6 +4,7 @@ import api from '../services/api';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import './GamePlay.css';
 import AudioPlayer from './AudioPlayer';
+import GameMascot from './GameMascot';
 
 const GamePlay = () => {
     const { gameId } = useParams();
@@ -22,6 +23,8 @@ const GamePlay = () => {
     const [audioLevels, setAudioLevels] = useState(Array(10).fill(0));
     const [feedbackAudio, setFeedbackAudio] = useState(null);
     const [sessionId, setSessionId] = useState(null); // New state to store the session ID
+    const [mascotMood, setMascotMood] = useState('neutral');
+    const [mascotMessage, setMascotMessage] = useState(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const audioAnalyzerRef = useRef(null);
@@ -238,6 +241,10 @@ const GamePlay = () => {
             console.log("Sending evaluation for word:", currentExercise.word);
             formData.append("expected_word", currentExercise.word);
 
+            // Montrer la mascotte en train de réfléchir pendant l'évaluation
+            setMascotMood('thinking');
+            setMascotMessage("Estou a avaliar a tua pronúncia...");
+
             // Enviar para o backend para avaliação
             const response = await api.post('/api/evaluate-pronunciation', formData, {
                 headers: {
@@ -260,12 +267,22 @@ const GamePlay = () => {
             // Armazenar o áudio de feedback para reprodução
             setFeedbackAudio(audio_feedback);
 
+            // Mettre à jour l'humeur de la mascotte en fonction du résultat
             if (isCorrect) {
                 setScore(prev => prev + score);
+                setMascotMood('happy');
+                setMascotMessage("Muito bem! Continua assim!");
+            } else {
+                setMascotMood('sad');
+                setMascotMessage("Quase lá! Tenta de novo, tu consegues!");
             }
         } catch (err) {
             console.error("Erro ao avaliar pronúncia:", err);
             setError("Erro ao avaliar sua resposta: " + (err.response?.data?.message || err.message));
+
+            // Mettre à jour la mascotte en cas d'erreur
+            setMascotMood('sad');
+            setMascotMessage("Ocorreu um erro. Vamos tentar de novo?");
         }
     };
 
@@ -504,6 +521,20 @@ const GamePlay = () => {
                 <div className="game-complete-header">
                     <span className="game-complete-emoji">🎉</span>
                     <h2>Parabéns!</h2>
+                    {/* Ajout d'une animation de confettis */}
+                    <div className="confetti-container">
+                        {Array.from({ length: 50 }).map((_, index) => (
+                            <div
+                                key={index}
+                                className="confetti"
+                                style={{
+                                    left: `${Math.random() * 100}%`,
+                                    animationDelay: `${Math.random() * 3}s`,
+                                    backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`
+                                }}
+                            />
+                        ))}
+                    </div>
                 </div>
 
                 <p>Você completou o jogo "{game.title}" com sucesso!</p>
@@ -515,6 +546,16 @@ const GamePlay = () => {
                             className="score-fill"
                             style={{ width: `${Math.min(100, (score / ((game.content?.length || 1) * 10)) * 100)}%` }}
                         ></div>
+                    </div>
+                </div>
+
+                {/* Nouvelle section d'affichage des récompenses */}
+                <div className="reward-section">
+                    <h3>Récompenses débloquées:</h3>
+                    <div className="rewards-container">
+                        {score > 70 && <div className="reward-badge">🏆 Champion de prononciation</div>}
+                        {score > 50 && <div className="reward-badge">⭐ Étoile montante</div>}
+                        {score > 30 && <div className="reward-badge">🎯 Bon effort</div>}
                     </div>
                 </div>
 
@@ -565,6 +606,13 @@ const GamePlay = () => {
 
             <div className="exercise-container">
                 <h3>{currentExercise.word || "Exercício de pronúncia"}</h3>
+
+                {/* Affichage de la mascotte avec son message */}
+                <GameMascot
+                    mood={mascotMood}
+                    message={mascotMessage}
+                    name="default"
+                />
 
                 <div className="exercise-details">
                     <p className="exercise-description">{currentExercise.prompt || currentExercise.description || "Pronuncie a palavra corretamente"}</p>

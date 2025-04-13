@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Bar, Line } from 'react-chartjs-2';
@@ -13,10 +13,24 @@ const Reports = () => {
     const [sessions, setSessions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    const [chartData, setChartData] = useState(null);
+    const [difficultyData, setDifficultyData] = useState(null);
+
+    // Create refs for charts
+    const barChartRef = useRef(null);
+    const lineChartRef = useRef(null);
 
     useEffect(() => {
         fetchUserSessions();
     }, []);
+
+    // Prepare chart data when sessions change
+    useEffect(() => {
+        if (sessions.length > 0) {
+            setChartData(prepareScoreData());
+            setDifficultyData(prepareDifficultyData());
+        }
+    }, [sessions]);
 
     const fetchUserSessions = async () => {
         try {
@@ -97,6 +111,20 @@ const Reports = () => {
         };
     };
 
+    // Chart.js options to prevent animation errors
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 800
+        },
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+        },
+    };
+
     if (isLoading) {
         return <div className="loading">Loading your progress data...</div>;
     }
@@ -105,17 +133,37 @@ const Reports = () => {
         return <div className="error">{error}</div>;
     }
 
+    if (sessions.length === 0) {
+        return <div className="no-data">No session data available yet. Complete some exercises to see your progress!</div>;
+    }
+
     return (
         <div className="reports-container">
             <h1>User Performance Reports</h1>
             <div className="charts">
                 <div className="chart">
                     <h2>Session Scores</h2>
-                    <Bar data={prepareScoreData()} />
+                    {chartData && (
+                        <div className="chart-wrapper">
+                            <Bar
+                                ref={barChartRef}
+                                data={chartData}
+                                options={chartOptions}
+                            />
+                        </div>
+                    )}
                 </div>
                 <div className="chart">
                     <h2>Difficulty Progression</h2>
-                    <Line data={prepareDifficultyData()} />
+                    {difficultyData && (
+                        <div className="chart-wrapper">
+                            <Line
+                                ref={lineChartRef}
+                                data={difficultyData}
+                                options={chartOptions}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
