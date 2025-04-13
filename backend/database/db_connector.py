@@ -38,6 +38,41 @@ class DatabaseConnector:
             return self.db.users.find_one({"_id": user_id})
         return self.in_memory_db.get("users", {}).get(user_id)
 
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user by ID with proper ObjectId conversion"""
+        try:
+            # Converter string ID para ObjectId se necessário
+            if isinstance(user_id, str):
+                try:
+                    obj_id = ObjectId(user_id)
+                except:
+                    print(f"⚠️ Formato de ID de usuário inválido: {user_id}")
+                    # Tentar buscar como string diretamente (fallback)
+                    if self.connected:
+                        user = self.db.users.find_one({"_id": user_id})
+                        if user:
+                            return user
+                    return None
+            else:
+                obj_id = user_id
+
+            # Buscar usuário pelo ObjectId
+            if self.connected:
+                user = self.db.users.find_one({"_id": obj_id})
+                if user:
+                    print(
+                        f"✅ Usuário encontrado: {user.get('name', 'Sem nome')}")
+                    return user
+                else:
+                    print(f"❌ Usuário não encontrado com ID: {user_id}")
+
+            # Fallback para busca em memória
+            return self.in_memory_db.get("users", {}).get(str(user_id))
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar usuário por ID: {str(e)}")
+            return None
+
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """Get user by username"""
         if self.connected:
@@ -107,6 +142,97 @@ class DatabaseConnector:
         sessions = self.in_memory_db.get("sessions", {}).values()
         user_sessions = [s for s in sessions if s.get("user_id") == user_id]
         return sorted(user_sessions, key=lambda x: x.get("start_time", 0), reverse=True)[:limit]
+
+    def update_session(self, session_id: str, update_data: Dict[str, Any]) -> bool:
+        """
+        Atualiza os dados de uma sessão existente
+
+        Args:
+            session_id: ID da sessão a atualizar
+            update_data: Dicionário com os campos a atualizar
+
+        Returns:
+            bool: True se sucesso, False caso contrário
+        """
+        try:
+            if self.connected:
+                # Atualizar no MongoDB
+                result = self.db.sessions.update_one(
+                    {"session_id": session_id},
+                    {"$set": update_data}
+                )
+
+                if result.modified_count == 0:
+                    print(
+                        f"Sessão não encontrada ou sem alterações: {session_id}")
+                    return False
+
+                print(f"Sessão atualizada com sucesso: {session_id}")
+                return True
+
+            # Fallback para in-memory
+            if "sessions" not in self.in_memory_db:
+                return False
+
+            if session_id not in self.in_memory_db["sessions"]:
+                return False
+
+            # Atualizar no armazenamento em memória
+            for key, value in update_data.items():
+                self.in_memory_db["sessions"][session_id][key] = value
+
+            return True
+        except Exception as e:
+            print(f"Erro ao atualizar sessão: {str(e)}")
+            return False
+
+    def update_user(self, user_id: str, update_data: Dict[str, Any]) -> bool:
+        """
+        Atualiza dados do usuário com suporte a campos aninhados (dot notation)
+        """
+        try:
+            updates = {}
+
+            # Processar campos com notação de ponto
+            for key, value in update_data.items():
+                if "." in key:
+                    # MongoDB suporta dot notation diretamente
+                    updates[key] = value
+                else:
+                    updates[key] = value
+
+            if self.connected:
+                result = self.db.users.update_one(
+                    {"_id": user_id},
+                    {"$set": updates}
+                )
+                return result.modified_count > 0
+
+            # Fallback para in-memory
+            if "users" not in self.in_memory_db:
+                return False
+
+            if user_id not in self.in_memory_db["users"]:
+                return False
+
+            # Atualizar no armazenamento in-memory
+            for key, value in update_data.items():
+                if "." in key:
+                    # Processar campos aninhados
+                    parts = key.split(".")
+                    current = self.in_memory_db["users"][user_id]
+                    for part in parts[:-1]:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+                    current[parts[-1]] = value
+                else:
+                    self.in_memory_db["users"][user_id][key] = value
+
+            return True
+        except Exception as e:
+            print(f"Erro ao atualizar usuário: {str(e)}")
+            return False
 
     def user_exists(self, username):
         """
@@ -292,3 +418,119 @@ class DatabaseConnector:
         except Exception as e:
             print(f"Erro ao buscar jogos do usuário: {str(e)}")
             return []
+
+    def add_to_user_history(self, user_id, session_summary):
+        """
+        Adiciona uma entrada ao histórico de sessões completas do usuário
+
+        Args:
+            user_id: ID do usuário
+            session_summary: Resumo da sessão a ser adicionada ao histórico
+
+        Returns:
+            bool: True se sucesso, False caso contrário
+        """
+        try:
+            if not user_id or not session_summary:
+                print("⚠️ Dados incompletos para adicionar ao histórico")
+                return False
+
+            print(
+                f"Adicionando ao histórico do usuário {user_id}: {session_summary}")
+
+            if self.connected:
+                # Usar $push para adicionar a uma array no MongoDB
+                result = self.db.users.update_one(
+                    {"_id": ObjectId(user_id) if ObjectId.is_valid(
+                        user_id) else user_id},
+                    {"$push": {"history.completed_sessions": session_summary}}
+                )
+
+                success = result.modified_count > 0
+                print(f"Histórico atualizado com sucesso: {success}")
+                return success
+
+            # Fallback para in-memory
+            user = self.get_user_by_id(user_id)
+            if not user:
+                print(f"❌ Usuário não encontrado: {user_id}")
+                return False
+
+            if "history" not in user:
+                user["history"] = {}
+            if "completed_sessions" not in user["history"]:
+                user["history"]["completed_sessions"] = []
+
+            user["history"]["completed_sessions"].append(session_summary)
+
+            # Salvar usuário atualizado
+            self.save_user(user)
+            return True
+
+        except Exception as e:
+            print(f"❌ Erro ao adicionar ao histórico do usuário: {str(e)}")
+            return False
+
+    def update_game(self, game_id, update_data):
+        """
+        Atualiza os dados de um jogo no banco de dados
+
+        Args:
+            game_id: ID do jogo a ser atualizado
+            update_data: Dicionário com os campos a atualizar
+
+        Returns:
+            bool: True se sucesso, False caso contrário
+        """
+        try:
+            if not game_id:
+                print("⚠️ ID do jogo não fornecido para atualização")
+                return False
+
+            print(f"Atualizando jogo {game_id} com dados: {update_data}")
+
+            if self.connected:
+                # Converter string ID para ObjectId se necessário
+                if isinstance(game_id, str):
+                    try:
+                        obj_id = ObjectId(game_id)
+                    except:
+                        print(f"⚠️ Formato de ID de jogo inválido: {game_id}")
+                        # Vamos tentar buscar diretamente como string
+                        result = self.db.games.update_one(
+                            {"_id": game_id},
+                            {"$set": update_data}
+                        )
+                        return result.modified_count > 0
+                else:
+                    obj_id = game_id
+
+                # Atualizar o jogo no MongoDB
+                result = self.db.games.update_one(
+                    {"_id": obj_id},
+                    {"$set": update_data}
+                )
+
+                success = result.modified_count > 0
+                print(f"Jogo atualizado com sucesso: {success}")
+                return success
+
+            # Fallback para in-memory
+            if "games" not in self.in_memory_db:
+                return False
+
+            # Tentar encontrar o jogo em memória
+            game_str_id = str(game_id)
+            if game_str_id in self.in_memory_db["games"]:
+                # Atualizar cada campo
+                for key, value in update_data.items():
+                    self.in_memory_db["games"][game_str_id][key] = value
+                return True
+
+            return False
+
+        except Exception as e:
+            print(f"❌ Erro ao atualizar jogo: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False

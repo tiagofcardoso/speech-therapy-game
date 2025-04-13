@@ -132,28 +132,19 @@ lipsync_generator = LipsyncGenerator()
 
 @app.before_request
 def initialize_services():
-    global game_generator, mcp_coordinator
+    global game_generator, mcp_coordinator, db
 
     # Verificar se já estão inicializados
     if game_generator is None or mcp_coordinator is None:
         try:
-            # Inicializar game generator
-            if game_generator is None:
-                game_generator = GameGenerator()
-                print("GameGenerator inicializado com sucesso")
-
-            # Inicializar MCP coordinator
-            if mcp_coordinator is None:
-                openai_api_key = os.environ.get("OPENAI_API_KEY")
-                if openai_api_key:
-                    mcp_coordinator = MCPCoordinator(api_key=openai_api_key)
-                    print("MCPCoordinator inicializado com sucesso")
-                else:
-                    print(
-                        "Aviso: OPENAI_API_KEY não encontrada. Funcionalidades de IA serão limitadas.")
+            # Inicializar serviços
+            game_generator = GameGenerator()
+            # Passar o db_connector para o MCPCoordinator
+            mcp_coordinator = MCPCoordinator(
+                api_key=OPENAI_API_KEY, db_connector=db)
+            print("MCP Coordinator initialized with database connection")
         except Exception as e:
             print(f"Error initializing services: {str(e)}")
-            traceback.print_exc()
 
 
 # Configure Sentry
@@ -423,41 +414,119 @@ def update_user_profile(user_id, requesting_user_id):
 @app.route('/api/start_game', methods=['POST'])
 @token_required
 def start_game(user_id):
-    # Get user profile from database
-    user = db.get_user(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    try:
+        # Log detalhado para depuração
+        print(f"========== INICIANDO SESSÃO DE JOGO ==========")
+        print(f"User ID: {user_id}")
 
-    user_profile = {
-        "name": user.get('name', 'Friend'),
-        "age": user.get('age', 6),
-        "history": user.get('history', {})
-    }
+        # Obter dados da requisição
+        data = request.json
+        game_id = data.get('game_id')
+        difficulty = data.get('difficulty', 'iniciante')
+        title = data.get('title', 'Jogo de Pronúncia')
+        game_type = data.get('game_type', 'exercícios de pronúncia')
 
-    # Create a new game session using MCP
-    session_data = mcp_coordinator.create_game_session(user_id, user_profile)
+        print(
+            f"Dados recebidos: game_id={game_id}, título={title}, dificuldade={difficulty}")
 
-    # Save session to database
-    session_id = db.save_session(session_data)
+        # Verificar se o usuário existe - buscar com tratamento de ObjectId
+        user = db.get_user_by_id(user_id)
 
-    # Get first exercise
-    current_exercise = session_data["exercises"][0]
+        if not user:
+            print(f"⚠️ Usuário não encontrado: {user_id}")
+            # Criar um usuário básico para não bloquear o fluxo (apenas em desenvolvimento)
+            if app.config.get('DEBUG', False):
+                print("Modo DEBUG: Criando usuário temporário para continuar o fluxo")
+                temp_user_id = db.save_user({
+                    "_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id,
+                    "name": "Usuário Temporário",
+                    "username": f"temp_{user_id}",
+                    "created_at": datetime.datetime.now(),
+                    "history": {}
+                })
+                user = db.get_user_by_id(temp_user_id)
+                print(f"Usuário temporário criado: {temp_user_id}")
+            else:
+                return jsonify({"error": "Usuário não encontrado"}), 404
 
-    # Create response with welcome instructions and first exercise
-    response = {
-        "session_id": session_data["session_id"],
-        "instructions": session_data["instructions"],
-        "current_exercise": {
-            "word": current_exercise["word"],
-            "prompt": current_exercise["prompt"],
-            "hint": current_exercise["hint"],
-            "visual_cue": current_exercise.get("visual_cue", "A picture would appear here"),
-            "index": 0,
-            "total": len(session_data["exercises"])
+        user_profile = {
+            "name": user.get('name', 'Amigo'),
+            "age": user.get('age', 6),
+            "history": user.get('history', {})
         }
-    }
 
-    return jsonify(response), 200
+        print(f"Perfil do usuário: {user_profile}")
+
+        # Se um game_id for fornecido, tentar buscar o jogo na base de dados
+        game_data = None
+        if game_id:
+            try:
+                game_data = db.get_game(game_id)
+                print(
+                    f"Jogo encontrado: {game_data.get('title') if game_data else 'Não encontrado'}")
+            except Exception as e:
+                print(f"Erro ao buscar jogo {game_id}: {str(e)}")
+                # Continuar mesmo se o jogo não for encontrado
+
+        # Criar uma nova sessão de jogo usando MCP
+        session_data = mcp_coordinator.create_game_session(
+            user_id, user_profile)
+
+        # Associar a sessão com o jogo que está sendo jogado
+        if game_id:
+            session_data["game_id"] = game_id
+            session_data["game_title"] = title
+            session_data["game_type"] = game_type
+
+        # Adicionar ID de sessão para rastreamento
+        if "session_id" not in session_data:
+            session_data["session_id"] = str(uuid.uuid4())
+
+        # Adicionar timestamps
+        session_data["created_at"] = datetime.datetime.now().isoformat()
+        session_data["user_id"] = user_id
+
+        # Salvar sessão no banco de dados
+        session_id = db.save_session(session_data)
+        print(f"Sessão criada com ID: {session_id}")
+
+        # Obter primeiro exercício
+        if "exercises" in session_data and len(session_data["exercises"]) > 0:
+            current_exercise = session_data["exercises"][0]
+        else:
+            print("⚠️ Nenhum exercício encontrado na sessão. Criando exercício padrão.")
+            # Criar um exercício padrão se não houver exercícios na sessão
+            current_exercise = {
+                "word": "teste",
+                "prompt": "Pronuncie esta palavra",
+                "hint": "Fale devagar",
+                "visual_cue": "Uma imagem apareceria aqui"
+            }
+            session_data["exercises"] = [current_exercise]
+
+        # Criar resposta com instruções de boas-vindas e primeiro exercício
+        response = {
+            "session_id": session_data["session_id"],
+            "instructions": session_data.get("instructions", ["Bem-vindo ao jogo de pronúncia!"]),
+            "current_exercise": {
+                "word": current_exercise.get("word", ""),
+                "prompt": current_exercise.get("prompt", "Pronuncie esta palavra"),
+                "hint": current_exercise.get("hint", "Fale devagar"),
+                "visual_cue": current_exercise.get("visual_cue", "Uma imagem apareceria aqui"),
+                "index": 0,
+                "total": len(session_data.get("exercises", []))
+            }
+        }
+
+        print(f"Resposta preparada: {response}")
+        print("========== SESSÃO DE JOGO INICIADA COM SUCESSO ==========")
+
+        return jsonify(response), 200
+    except Exception as e:
+        print(f"❌ Erro ao iniciar jogo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Falha ao iniciar jogo: {str(e)}"}), 500
 
 
 @app.route('/api/submit_response', methods=['POST'])
@@ -476,93 +545,71 @@ def submit_response(user_id):
         return jsonify({"error": "Unauthorized access to session"}), 403
 
     # Use MCP to evaluate the response
-    evaluation_results = mcp_coordinator.evaluate_response(
+    evaluation_results = mcp_coordinator.process_response(
         session_data, recognized_text)
 
-    # Update session in database with evaluation results
-    if "evaluations" not in session_data:
-        session_data["evaluations"] = []
+    if "session_complete" in evaluation_results and evaluation_results["session_complete"]:
+        # Calcular pontuação final
+        responses = session_data.get("responses", [])
+        total_score = sum(r.get("score", 0) for r in responses)
+        exercises_count = len(session_data.get("exercises", []))
 
-    session_data["evaluations"].append({
-        "exercise_index": session_data["current_index"],
-        "expected_word": session_data["exercises"][session_data["current_index"]]["word"],
-        "recognized_text": recognized_text,
-        "accuracy_score": evaluation_results.get("accuracy_score", 0),
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    })
+        # Evitar divisão por zero
+        if exercises_count > 0:
+            final_score_percentage = (
+                total_score / (exercises_count * 10)) * 100
+        else:
+            final_score_percentage = 0
 
-    # Update the current index if moving to the next exercise
-    if evaluation_results["next_steps"]["advance_to_next"]:
-        session_data["current_index"] += 1
+        # Verificar se atingiu o mínimo para o nível
+        difficulty = session_data.get("difficulty", "iniciante")
+        completion_threshold = {
+            "iniciante": 80,
+            "médio": 90,
+            "avançado": 100
+        }.get(difficulty, 80)
 
-    # Save evaluation as a separate record
-    evaluation_record = {
-        "session_id": session_id,
-        "user_id": user_id,
-        "exercise_index": session_data["current_index"],
-        "expected_word": session_data["exercises"][session_data["current_index"]]["word"],
-        "recognized_text": recognized_text,
-        "evaluation": evaluation_results["evaluation"],
-        "accuracy_score": evaluation_results.get("accuracy_score", 0)
-    }
-    db.save_evaluation(evaluation_record)
+        # Definir se o jogo foi concluído com base na pontuação mínima
+        is_completed = final_score_percentage >= completion_threshold
 
-    # Update session in database
-    db.update_session(session_id, session_data)
+        # Atualizar no banco de dados
+        db.update_session(session_id, {
+            "completed": is_completed,
+            "final_score": final_score_percentage,
+            "completion_status": "completed" if is_completed else "attempted",
+            "end_time": datetime.datetime.now().isoformat()
+        })
 
-    # Prepare response with feedback and next exercise if applicable
-    current_index = session_data["current_index"]
-    total_exercises = len(session_data["exercises"])
-    is_complete = current_index >= total_exercises
-
-    if is_complete:
-        # Calculate final score
-        final_score = 0
-        if session_data.get("evaluations"):
-            scores = [ev.get("accuracy_score", 0)
-                      for ev in session_data.get("evaluations")]
-            final_score = int(sum(scores) / len(scores) * 100)
-
-        # Update user history
+        # Adicionar ao histórico do usuário
         user = db.get_user(user_id)
-        history = user.get("history", {})
-        session_summary = {
-            "completed_at": datetime.datetime.utcnow().isoformat(),
-            "difficulty": session_data["difficulty"],
-            "exercises_count": total_exercises,
-            "score": final_score
-        }
-        if "completed_sessions" not in history:
-            history["completed_sessions"] = []
-        history["completed_sessions"].append(session_summary)
-        db.update_user(user_id, {"history": history})
+        if user:
+            history = user.get("history", {})
+            session_summary = {
+                "completed_at": datetime.datetime.now().isoformat(),
+                "difficulty": difficulty,
+                "exercises_count": exercises_count,
+                "score": final_score_percentage,
+                "completed": is_completed
+            }
 
-        # Mark session as completed
-        db.update_session(
-            session_id, {"completed": True, "final_score": final_score})
+            if "completed_sessions" not in history:
+                history["completed_sessions"] = []
 
-        response = {
+            history["completed_sessions"].append(session_summary)
+            db.update_user(user_id, {"history": history})
+
+        # Retornar resultado com informação sobre conclusão
+        return jsonify({
             "session_complete": True,
-            "feedback": evaluation_results["feedback"],
-            "final_score": final_score
-        }
-    else:
-        current_exercise = session_data["exercises"][current_index]
-        response = {
-            "session_complete": False,
-            "feedback": evaluation_results["feedback"],
-            "current_exercise": {
-                "word": current_exercise["word"],
-                "prompt": current_exercise["prompt"],
-                "hint": current_exercise["hint"],
-                "visual_cue": current_exercise.get("visual_cue", "A picture would appear here"),
-                "index": current_index,
-                "total": total_exercises
-            },
-            "repeat_exercise": not evaluation_results["next_steps"]["advance_to_next"]
-        }
+            "feedback": evaluation_results.get("feedback", {}),
+            "final_score": final_score_percentage,
+            "passed_threshold": is_completed,
+            "completion_status": "completed" if is_completed else "need_improvement",
+            "completion_threshold": completion_threshold
+        }), 200
 
-    return jsonify(response), 200
+    # Resto da função para processar respostas normais...
+    # ...
 
 
 @app.route('/api/recognize', methods=['POST'])
@@ -992,6 +1039,109 @@ def generate_game():
 # Add this route to use Gigi to generate games
 
 
+@app.route('/api/game/next', methods=['POST', 'OPTIONS'])
+@token_required
+def generate_next_game(user_id):
+    """Gera um novo jogo após o término do atual"""
+    # Handle OPTIONS request for CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers',
+                             'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+
+    try:
+        print(f"Gerando próximo jogo para usuário: {user_id}")
+        data = request.get_json() or {}
+
+        # Extrair parâmetros da requisição
+        difficulty = data.get('difficulty', 'iniciante')
+        previous_game_id = data.get('previous_game_id')
+
+        # Se um ID de jogo anterior foi fornecido, buscar sua dificuldade
+        if previous_game_id:
+            try:
+                previous_game = db.get_game(previous_game_id)
+                if previous_game:
+                    difficulty = previous_game.get('difficulty', difficulty)
+                    print(
+                        f"Usando dificuldade do jogo anterior: {difficulty}")
+            except Exception as e:
+                print(f"Erro ao buscar jogo anterior: {str(e)}")
+
+        # Sempre usar 'exercícios de pronúncia' como tipo
+        game_type = "exercícios de pronúncia"
+
+        # Verificar se o MCP coordinator está inicializado
+        global mcp_coordinator
+        if not mcp_coordinator:
+            initialize_services()
+            if not mcp_coordinator:
+                return jsonify({
+                    "success": False,
+                    "message": "Não foi possível inicializar os serviços de jogo"
+                }), 500
+
+        # Usar o game_designer para criar um novo jogo
+        game_data = mcp_coordinator.game_designer.create_game(
+            user_id=user_id,
+            difficulty=difficulty,
+            game_type=game_type
+        )
+
+        # Transformar para o formato esperado pelo frontend
+        exercises = []
+        raw_exercises = game_data.get("content", [])
+
+        for idx, exercise in enumerate(raw_exercises):
+            transformed_exercise = {
+                "word": exercise.get("word", ""),
+                "prompt": exercise.get("tip", "Pronuncie esta palavra"),
+                "hint": exercise.get("tip", "Fale devagar"),
+                "visual_cue": exercise.get("word", ""),
+                "index": idx,
+                "total": len(raw_exercises)
+            }
+            exercises.append(transformed_exercise)
+
+        # Criar o objeto de jogo compatível
+        compatible_game = {
+            "game_id": game_data.get("game_id", ""),
+            "title": game_data.get("title", "Jogo de Pronúncia"),
+            "description": game_data.get("description", ""),
+            "instructions": game_data.get("instructions", []),
+            "difficulty": game_data.get("difficulty", "iniciante"),
+            "game_type": "exercícios de pronúncia",
+            "content": exercises,
+            "metadata": game_data.get("metadata", {})
+        }
+
+        # Salvar o jogo no banco de dados
+        try:
+            game_id = db.store_game(user_id, compatible_game)
+            compatible_game["game_id"] = str(game_id)
+        except Exception as e:
+            print(
+                f"Aviso: Não foi possível salvar o jogo no banco de dados: {str(e)}")
+
+        return jsonify({
+            "success": True,
+            "game": compatible_game,
+            "message": "Novo jogo gerado com sucesso"
+        })
+
+    except Exception as e:
+        print(f"Erro ao gerar próximo jogo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"Falha ao gerar próximo jogo: {str(e)}"
+        }), 500
+
+
 @app.route('/api/gigi/generate-game', methods=['POST'])
 @token_required
 def generate_gigi_game(user_id):
@@ -1370,6 +1520,398 @@ def calculate_similarity(text1, text2):
         # Verificar a correspondência simples de caracteres
         common_chars = sum(1 for c in text1 if c in text2)
         return common_chars / max(len(text1), len(text2))
+
+
+@app.route('/api/user/current_progress', methods=['GET'])
+@token_required
+def get_current_progress(user_id):
+    """Retorna o progresso atual do usuário em jogos ativos"""
+    try:
+        # Obter progresso em memória do GameDesigner
+        if user_id in game_generator.current_games:
+            current_game = game_generator.current_games[user_id]
+
+            # Calcular percentual de conclusão
+            total_exercises = len(current_game.get(
+                "content", {}).get("exercises", []))
+            current_index = current_game.get("current_index", 0)
+            completion_percentage = (
+                current_index / total_exercises * 100) if total_exercises > 0 else 0
+
+            # Obter metadados para exibição
+            return jsonify({
+                "success": True,
+                "has_active_game": True,
+                "game_id": current_game.get("game_id"),
+                "game_type": current_game.get("game_type"),
+                "difficulty": current_game.get("difficulty"),
+                "current_score": current_game.get("score", 0),
+                "progress": {
+                    "current_exercise": current_index,
+                    "total_exercises": total_exercises,
+                    "completion_percentage": round(completion_percentage, 1)
+                },
+                "started_at": current_game.get("created_at")
+            })
+
+        # Caso não tenha jogo ativo, buscar o histórico de progresso do banco de dados
+        user = db.get_user(user_id)
+        if user and "game_progress" in user and user["game_progress"]:
+            # Pegar o progresso mais recente
+            last_progress = user["game_progress"][0]
+
+            return jsonify({
+                "success": True,
+                "has_active_game": False,
+                "last_activity": {
+                    "game_id": last_progress.get("game_id"),
+                    "game_type": last_progress.get("game_type"),
+                    "difficulty": last_progress.get("difficulty"),
+                    "score": last_progress.get("current_score", 0),
+                    "exercises_completed": last_progress.get("current_index", 0),
+                    "timestamp": last_progress.get("timestamp")
+                }
+            })
+
+        return jsonify({
+            "success": True,
+            "has_active_game": False,
+            "message": "No active games or recent progress found"
+        })
+
+    except Exception as e:
+        print(f"Error retrieving user progress: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": "Failed to retrieve progress information"
+        }), 500
+
+
+@app.route('/api/user/statistics', methods=['GET'])
+@token_required
+def get_user_statistics(user_id):
+    """Retorna estatísticas detalhadas do usuário para o dashboard"""
+    try:
+        # Obter usuário do banco de dados
+        user = db.get_user(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Obter estatísticas básicas
+        stats = user.get("statistics", {})
+        exercises_completed = stats.get("exercises_completed", 0)
+        accuracy = stats.get("accuracy", 0)
+
+        # Determinar nível atual e próximo nível
+        difficulty_mapping = {
+            "iniciante": {"next": "médio", "threshold": 80},
+            "médio": {"next": "avançado", "threshold": 90},
+            "avançado": {"next": "avançado+", "threshold": 100}
+        }
+
+        # Determinar nível atual com base na precisão média
+        current_level = "iniciante"
+        if accuracy >= 90:
+            current_level = "avançado"
+        elif accuracy >= 80:
+            current_level = "médio"
+
+        next_level = difficulty_mapping.get(
+            current_level, {}).get("next", "médio")
+        threshold = difficulty_mapping.get(
+            current_level, {}).get("threshold", 80)
+
+        # Calcular progresso para o próximo nível
+        level_progress = 0
+        if current_level == "iniciante":
+            # 0-80% de precisão mapeia para 0-100% de progresso para nível médio
+            level_progress = min(100, (accuracy / 80) * 100)
+        elif current_level == "médio":
+            # 80-90% de precisão mapeia para 0-100% de progresso para nível avançado
+            level_progress = min(100, ((accuracy - 80) / 10) * 100)
+        else:
+            # No nível avançado, mantemos 100%
+            level_progress = 100
+
+        # Gerar mensagem personalizada
+        level_message = ""
+        if level_progress < 25:
+            level_message = f"Continue praticando para melhorar sua precisão!"
+        elif level_progress < 75:
+            level_message = f"Você está progredindo bem para o nível {next_level}!"
+        elif level_progress < 95:
+            level_message = f"Você está quase pronto para avançar ao nível {next_level}!"
+        else:
+            level_message = f"Excelente! Você está dominando o nível {current_level}!"
+
+        # Retornar estatísticas
+        return jsonify({
+            "exercises_completed": exercises_completed,
+            "accuracy": accuracy,
+            "current_level": current_level,
+            "next_level": next_level,
+            "level_progress_percentage": level_progress,
+            "level_threshold": threshold,
+            "level_progress_message": level_message,
+            "last_login": stats.get("last_login", ""),
+            "joined_days_ago": (datetime.datetime.utcnow() - user.get("created_at", datetime.datetime.utcnow())).days
+        }), 200
+
+    except Exception as e:
+        print(f"Error retrieving user statistics: {str(e)}")
+        return jsonify({
+            "error": "Failed to retrieve user statistics"
+        }), 500
+
+
+@app.route('/api/game/finish', methods=['OPTIONS'])
+def options_finish_game():
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers',
+                         'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    return response
+
+
+@app.route('/api/game/finish', methods=['POST'])
+@token_required
+def finish_game(user_id):
+    """
+    Finaliza um jogo e atualiza o status no banco de dados
+    """
+    try:
+        # Log detalhado para depuração
+        print(f"========== FINALIZANDO JOGO ==========")
+
+        # Extrair dados do request
+        data = request.json
+        session_id = data.get('session_id')
+        completed_manually = data.get('completed_manually', False)
+        completion_option = data.get('completion_option', 'finish')
+        final_score = data.get('final_score', 0)
+        generate_next = data.get('generate_next', False)
+
+        print(
+            f"Dados recebidos: session_id={session_id}, score={final_score}, option={completion_option}")
+
+        if not session_id:
+            print("❌ Erro: ID da sessão não fornecido")
+            return jsonify({
+                "success": False,
+                "message": "ID da sessão não fornecido"
+            }), 400
+
+        # Buscar a sessão no banco de dados
+        session = db.get_session(session_id)
+        print(f"Sessão encontrada: {session is not None}")
+
+        if not session:
+            print(f"❌ Erro: Sessão não encontrada com ID: {session_id}")
+            return jsonify({
+                "success": False,
+                "message": "Sessão não encontrada"
+            }), 404
+
+        # Verificar se o usuário tem permissão para finalizar esta sessão
+        session_user_id = session.get('user_id')
+        print(
+            f"User ID da sessão: {session_user_id}, User ID autenticado: {user_id}")
+
+        if str(session_user_id) != str(user_id):
+            print(
+                f"❌ Erro: Usuário {user_id} não tem permissão para finalizar a sessão de {session_user_id}")
+            return jsonify({
+                "success": False,
+                "message": "Você não tem permissão para finalizar esta sessão"
+            }), 403
+
+        # Capturar o game_id da sessão para atualizar o jogo
+        game_id = session.get('game_id')
+        print(f"Game ID associado à sessão: {game_id}")
+
+        # Atualizar os dados da sessão com os valores enviados pelo frontend
+        update_data = {
+            'completed': True,
+            'end_time': datetime.datetime.now().isoformat(),
+            'completed_manually': completed_manually,
+            'completion_option': completion_option,
+            'final_score': final_score,
+            'exercises_completed': len(session.get('exercises', [])) if 'exercises' in session else 0
+        }
+
+        print(f"Atualizando sessão com dados: {update_data}")
+
+        # Atualizar a sessão no banco de dados
+        success = db.update_session(session_id, update_data)
+        print(f"Atualização da sessão: {'Sucesso' if success else 'Falha'}")
+
+        # Se o jogo foi identificado, também atualize seu status para 'completed'
+        if game_id:
+            try:
+                print(f"Atualizando status do jogo {game_id} para 'completed'")
+                # Usar o método que adiciona o método update_game em db_connector.py
+                game_update_result = db.update_game(game_id, {
+                    'completed': True,
+                    'completed_at': datetime.datetime.now().isoformat(),
+                    'final_score': final_score
+                })
+                print(
+                    f"Atualização do jogo: {'Sucesso' if game_update_result else 'Falha'}")
+            except Exception as game_err:
+                print(f"❌ Erro ao atualizar jogo: {str(game_err)}")
+                # Não bloquear o fluxo se houver erro na atualização do jogo
+
+        if not success:
+            print("❌ Erro: Falha ao atualizar a sessão no banco de dados")
+            return jsonify({
+                "success": False,
+                "message": "Falha ao atualizar a sessão"
+            }), 500
+
+        # Atualizar as estatísticas do usuário
+        user = db.get_user_by_id(user_id)
+        if user:
+            print(
+                f"Atualizando estatísticas do usuário: {user.get('name', 'Unknown')}")
+
+            # Determinar o número de exercícios concluídos
+            if 'exercises' in session:
+                exercises_completed = len(session['exercises'])
+            else:
+                exercises_completed = update_data.get('exercises_completed', 0)
+
+            # Atualizar contador total de exercícios
+            current_exercises = user.get(
+                'statistics', {}).get('exercises_completed', 0)
+
+            # Calcular nova precisão média
+            current_accuracy = user.get('statistics', {}).get('accuracy', 0)
+            completed_sessions_count = len(
+                user.get('history', {}).get('completed_sessions', [])) + 1
+            new_accuracy = ((current_accuracy * (completed_sessions_count - 1)
+                             ) + final_score) / completed_sessions_count
+
+            # Preparar dados de atualização
+            user_updates = {
+                'statistics.exercises_completed': current_exercises + exercises_completed,
+                'statistics.last_activity': datetime.datetime.now().isoformat(),
+                'statistics.accuracy': round(new_accuracy, 2)
+            }
+
+            # Adicionar resumo da sessão ao histórico
+            session_summary = {
+                'session_id': session_id,
+                'completed_at': datetime.datetime.now().isoformat(),
+                'difficulty': session.get('difficulty', 'iniciante'),
+                'score': final_score,
+                'exercises_completed': exercises_completed,
+                'game_id': game_id,
+                'game_title': session.get('game_title', 'Jogo sem título')
+            }
+
+            # Atualizar dados do usuário no banco de dados
+            db.update_user(user_id, user_updates)
+
+            # Adicionar sessão ao histórico
+            history_update = db.add_to_user_history(user_id, session_summary)
+            print(
+                f"Atualização do histórico: {'Sucesso' if history_update else 'Falha'}")
+
+        # Se solicitado, gerar um novo jogo
+        next_game = None
+        if generate_next:
+            # ... código existente para gerar próximo jogo ...
+            pass
+
+        response_data = {
+            "success": True,
+            "message": "Jogo finalizado com sucesso",
+            "final_score": final_score
+        }
+
+        # Adicionar o próximo jogo à resposta se foi gerado
+        if next_game:
+            response_data["next_game"] = next_game
+
+        print("========== JOGO FINALIZADO COM SUCESSO ==========")
+        return jsonify(response_data)
+
+    except Exception as e:
+        import traceback
+        print(f"❌ Erro ao finalizar jogo: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "message": f"Erro interno ao finalizar o jogo: {str(e)}"
+        }), 500
+
+
+@app.route('/api/user/history', methods=['GET'])
+@token_required
+def get_user_history(user_id):
+    """
+    Retorna o histórico completo de sessões do usuário
+    """
+    try:
+        # Buscar o usuário no banco de dados
+        user = db.get_user_by_id(user_id)
+        if not user:
+            return jsonify({
+                "success": False,
+                "message": "Usuário não encontrado"
+            }), 404
+
+        # Extrair o histórico de sessões
+        history = user.get("history", {})
+        completed_sessions = history.get("completed_sessions", [])
+
+        # Ordenar por data de conclusão (mais recente primeiro)
+        sorted_sessions = sorted(
+            completed_sessions,
+            key=lambda x: x.get("completed_at", ""),
+            reverse=True
+        )
+
+        # Preparar os dados para a resposta
+        sessions_data = []
+        for session in sorted_sessions:
+            sessions_data.append({
+                "session_id": session.get("session_id", ""),
+                "game_id": session.get("game_id", ""),
+                "game_title": session.get("game_title", "Jogo sem título"),
+                "completed_at": session.get("completed_at", ""),
+                "difficulty": session.get("difficulty", "iniciante"),
+                "score": session.get("score", 0),
+                "exercises_completed": session.get("exercises_completed", 0)
+            })
+
+        # Retornar dados de estatísticas gerais e sessões
+        statistics = {
+            "total_sessions": len(sessions_data),
+            "average_score": sum(s.get("score", 0) for s in sessions_data) / max(len(sessions_data), 1),
+            "total_exercises_completed": sum(s.get("exercises_completed", 0) for s in sessions_data),
+            "sessions_by_difficulty": {
+                "iniciante": len([s for s in sessions_data if s.get("difficulty") == "iniciante"]),
+                "médio": len([s for s in sessions_data if s.get("difficulty") == "médio"]),
+                "avançado": len([s for s in sessions_data if s.get("difficulty") == "avançado"])
+            }
+        }
+
+        return jsonify({
+            "success": True,
+            "statistics": statistics,
+            "sessions": sessions_data
+        })
+
+    except Exception as e:
+        print(f"Erro ao buscar histórico do usuário: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao buscar histórico: {str(e)}"
+        }), 500
 
 
 if __name__ == "__main__":

@@ -301,6 +301,31 @@
     background-color: #5a6268;
 }
 
+.finish-game-button {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 25px;
+    margin-top: 20px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    transition: background-color 0.2s;
+}
+
+.finish-game-button:hover {
+    background-color: #5a6268;
+}
+
+.finish-game-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 @keyframes spin {
     0% {
         transform: rotate(0deg);

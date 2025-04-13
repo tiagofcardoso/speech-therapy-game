@@ -16,13 +16,25 @@ const GameScreen = () => {
     const [showInstructions, setShowInstructions] = useState(true);
     const [sessionComplete, setSessionComplete] = useState(false);
     const [finalScore, setFinalScore] = useState(null);
+    const [difficulty, setDifficulty] = useState("iniciante");
+    const [completionThreshold] = useState(80); // Define a threshold for completion
     const navigate = useNavigate();
 
     useEffect(() => {
         startGame();
     }, []);
 
-    const startGame = async () => {
+    // Adicione esta função para depuração
+    const logDebugInfo = (message, data = {}) => {
+        console.log(`[DEBUG] ${message}`, {
+            timestamp: new Date().toISOString(),
+            sessionId,
+            difficulty,
+            ...data
+        });
+    };
+
+    const startGame = async (difficultyLevel = "iniciante") => {
         try {
             setIsLoading(true);
             setError(null);
@@ -30,7 +42,7 @@ const GameScreen = () => {
             const token = localStorage.getItem('token');
             const response = await axios.post(
                 '/api/start_game',
-                {},
+                { difficulty: difficultyLevel },
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -42,6 +54,7 @@ const GameScreen = () => {
             setSessionId(response.data.session_id);
             setCurrentExercise(response.data.current_exercise);
             setInstructions(response.data.instructions);
+            setDifficulty(difficultyLevel);
             setShowInstructions(true);
         } catch (err) {
             console.error('Error starting game:', err);
@@ -58,8 +71,6 @@ const GameScreen = () => {
     const handleStartExercises = () => {
         setShowInstructions(false);
     };
-
-    // Add this function to your GameScreen component
 
     const fetchGame = async (gameId) => {
         try {
@@ -80,7 +91,6 @@ const GameScreen = () => {
                 return null;
             }
 
-            // Successfully loaded the game
             return response.data.game;
         } catch (error) {
             console.error('Error fetching game:', error);
@@ -119,7 +129,6 @@ const GameScreen = () => {
             } else {
                 setFeedback(response.data.feedback);
 
-                // If not repeating the current exercise, update to the next one
                 if (!response.data.repeat_exercise) {
                     setCurrentExercise(response.data.current_exercise);
                 }
@@ -136,10 +145,145 @@ const GameScreen = () => {
         navigate('/dashboard');
     };
 
-    const handleNewGame = () => {
+    const handleRetryGame = () => {
         setSessionComplete(false);
         setFeedback(null);
-        startGame();
+        startGame(difficulty);
+    };
+
+    const handleNextGame = async () => {
+        setSessionComplete(false);
+        setFeedback(null);
+        setIsLoading(true);
+
+        try {
+            const token = localStorage.getItem('token');
+            let nextDifficulty = difficulty;
+
+            if (finalScore >= completionThreshold && difficulty !== "avançado") {
+                const difficultyMap = {
+                    "iniciante": "médio",
+                    "médio": "avançado"
+                };
+                nextDifficulty = difficultyMap[difficulty] || difficulty;
+            }
+
+            const response = await axios.post(
+                '/api/start_game',
+                {
+                    difficulty: nextDifficulty,
+                    progression: true
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            setSessionId(response.data.session_id);
+            setCurrentExercise(response.data.current_exercise);
+            setInstructions(response.data.instructions);
+            setDifficulty(nextDifficulty);
+            setShowInstructions(true);
+        } catch (err) {
+            console.error('Error starting next game:', err);
+            setError('Falha ao iniciar o próximo jogo. Tente novamente.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Modifique a função handleFinishGame para incluir mais logs
+    const handleFinishGame = async (option = 'finish') => {
+        logDebugInfo(`Iniciando finalização do jogo com opção: ${option}`);
+        console.log(`Enviando finalização para sessionId: ${sessionId}`);
+
+        try {
+            setIsLoading(true);
+
+            const token = localStorage.getItem('token');
+            const payload = {
+                session_id: sessionId,
+                completed_manually: true,
+                completion_option: option
+            };
+
+            console.log("Payload enviado:", payload);
+
+            // Chamar o endpoint de finalização
+            const response = await axios.post(
+                '/api/game/finish',
+                payload,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            console.log("Resposta completa:", response);
+            logDebugInfo(`Resposta do endpoint de finalização:`, response.data);
+
+            // Ações específicas dependendo da opção escolhida
+            switch (option) {
+                case 'dashboard':
+                    navigate('/dashboard');
+                    break;
+
+                case 'retry':
+                    setSessionComplete(false);
+                    setFeedback(null);
+                    startGame(difficulty);
+                    break;
+
+                case 'next':
+                    handleNextGame();
+                    break;
+
+                default:
+                    // Marcar jogo como concluído e mostrar tela de conclusão
+                    setSessionComplete(true);
+                    // Calcular pontuação parcial se não tiver pontuação final
+                    if (!finalScore) {
+                        setFinalScore(calculatePartialScore());
+                    }
+                    // Definir feedback se não houver
+                    if (!feedback) {
+                        setFeedback({
+                            praise: "Você completou parte do jogo!",
+                            encouragement: "Praticar regularmente é importante para o progresso."
+                        });
+                    }
+                    break;
+            }
+        } catch (err) {
+            console.error('Erro ao finalizar jogo:', err);
+            setError('Falha ao finalizar o jogo corretamente.');
+            logDebugInfo(`ERRO ao finalizar jogo`, {
+                error: err.message,
+                stack: err.stack
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const calculatePartialScore = () => {
+        if (!sessionId) return 0;
+
+        // Se não tivermos dados suficientes, retornamos uma pontuação padrão
+        if (!feedback) return 50;
+
+        // Calcula com base nos exercícios atuais completados
+        const exercisesCompleted = currentExercise ? currentExercise.index : 0;
+        const totalExercises = currentExercise ? currentExercise.total : 1;
+        const completionPercentage = (exercisesCompleted / totalExercises) * 100;
+
+        // Penaliza um pouco por não completar todo o jogo
+        return Math.max(30, completionPercentage * 0.8);
     };
 
     if (isLoading && !currentExercise) {
@@ -170,22 +314,43 @@ const GameScreen = () => {
         return (
             <div className="game-complete">
                 <div className="game-complete-content">
-                    <h2>Great Job!</h2>
+                    <h2>{finalScore >= completionThreshold ? "Parabéns! 🎉" : "Bom Trabalho!"}</h2>
                     <div className="final-score-container">
-                        <div className="final-score-circle">
-                            <span>{finalScore}%</span>
+                        <div className={`final-score-circle ${finalScore >= completionThreshold ? "passed" : "retry"}`}>
+                            <span>{Math.round(finalScore)}%</span>
                         </div>
+                        {finalScore < completionThreshold && (
+                            <p className="threshold-message">
+                                Você precisa de {completionThreshold}% para avançar neste nível.
+                            </p>
+                        )}
                     </div>
                     <div className="feedback">
                         <p className="praise">{feedback?.praise}</p>
                         <p className="encouragement">{feedback?.encouragement}</p>
                     </div>
                     <div className="game-complete-buttons">
-                        <button className="primary-button" onClick={handleNewGame}>
-                            Play Again
+                        {/* Botões simplificados com ações diretas */}
+                        <button
+                            className="secondary-button"
+                            onClick={() => handleFinishGame('retry')}
+                            disabled={isLoading}
+                        >
+                            Jogar Novamente
                         </button>
-                        <button className="secondary-button" onClick={handleGoToDashboard}>
-                            Back to Dashboard
+                        <button
+                            className="primary-button"
+                            onClick={() => handleFinishGame('next')}
+                            disabled={isLoading}
+                        >
+                            Próximo Jogo
+                        </button>
+                        <button
+                            className="outline-button"
+                            onClick={() => handleFinishGame('dashboard')}
+                            disabled={isLoading}
+                        >
+                            Voltar ao Início
                         </button>
                     </div>
                 </div>
@@ -229,7 +394,6 @@ const GameScreen = () => {
                                 </div>
 
                                 <div className="visual-cue">
-                                    {/* This would be an actual image in production */}
                                     <div className="image-placeholder">
                                         {currentExercise.visual_cue}
                                     </div>
@@ -258,6 +422,16 @@ const GameScreen = () => {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {!showInstructions && !sessionComplete && (
+                        <button
+                            className="finish-game-button"
+                            onClick={() => handleFinishGame('finish')}
+                            disabled={isLoading}
+                        >
+                            Finalizar Jogo
+                        </button>
                     )}
                 </>
             )}

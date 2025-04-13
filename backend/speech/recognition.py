@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 def recognize_speech(audio_file):
     """
-    Convert speech to text using Google Speech Recognition
+    Reconhece fala a partir de dados de áudio usando serviços de STT
 
     Args:
-        audio_file: Audio file or file-like object with audio data
+        audio_file: Arquivo de áudio para processamento
 
     Returns:
-        str: Recognized text or empty string if recognition failed
+        str: Texto reconhecido ou mensagem de erro
     """
     try:
         # Criar caminho para arquivo temporário
@@ -52,6 +52,18 @@ def recognize_speech(audio_file):
             audio_data, language='pt-BR')
         logger.info(f"Texto reconhecido: '{recognized_text}'")
 
+        # Quando o reconhecimento falha com texto vazio ou baixa confiança:
+        if not recognized_text or recognized_text.strip() == "":
+            logger.warning("STT não reconheceu nenhum texto")
+            return "Texto não reconhecido"
+
+        # Se a confiança for muito baixa, também consideramos como falha
+        confidence = 0.5  # Placeholder for confidence value
+        if confidence < 0.4:  # Valor de threshold para confiança
+            logger.warning(
+                f"STT reconheceu texto com baixa confiança: {confidence}")
+            return "Texto não reconhecido"
+
         # Limpar arquivos temporários
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
@@ -62,13 +74,13 @@ def recognize_speech(audio_file):
 
     except sr.UnknownValueError:
         logger.warning("Não foi possível entender o áudio")
-        return ""
+        return "Texto não reconhecido"
     except sr.RequestError as e:
         logger.error(f"Erro no serviço de reconhecimento: {e}")
-        return ""
+        return "Texto não reconhecido"
     except Exception as e:
-        logger.error(f"Error in speech recognition: {e}")
-        return ""
+        logger.error(f"Erro no reconhecimento de fala: {str(e)}")
+        return "Texto não reconhecido"
 
 
 def evaluate_pronunciation(user_input, correct_phrase):

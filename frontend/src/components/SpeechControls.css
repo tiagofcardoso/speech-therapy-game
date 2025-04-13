@@ -1,0 +1,118 @@
+.speech-controls {
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.start-button,
+.recording-button,
+.retry-button {
+    padding: 12px 24px;
+    border-radius: 50px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.start-button {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.recording-button {
+    background-color: #f44336;
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+
+.retry-button {
+    background-color: #2196F3;
+    color: white;
+    margin-top: 15px;
+}
+
+.start-button:hover,
+.retry-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.recording-button:hover {
+    background-color: #d32f2f;
+}
+
+.start-button svg,
+.recording-button svg,
+.retry-button svg {
+    margin-right: 8px;
+    font-size: 1.2rem;
+}
+
+.recognition-error {
+    background-color: #fff8e6;
+    border: 1px solid #ffe0b2;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.error-icon-container {
+    margin-bottom: 12px;
+}
+
+.error-icon {
+    font-size: 32px;
+    color: #ff9800;
+}
+
+.error-message {
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1rem;
+}
+
+.recognized-text-container {
+    margin-top: 15px;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f0f7ff;
+    width: 100%;
+    max-width: 400px;
+}
+
+.recognized-text {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}

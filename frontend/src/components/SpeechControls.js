@@ -1,97 +1,58 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaMicrophone, FaStop, FaRedo, FaExclamationTriangle } from 'react-icons/fa';
 import axios from 'axios';
-import { FaMicrophone, FaStop, FaVolumeUp } from 'react-icons/fa';
+import './SpeechControls.css';
 
-const SpeechControls = ({ word, onRecognitionComplete }) => {
+const SpeechControls = ({ word, onRecognitionComplete, isLoading }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [recordedAudio, setRecordedAudio] = useState(null);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
-    const audioRef = useRef(null);
+    const [audioBlob, setAudioBlob] = useState(null);
+    const [recognizedText, setRecognizedText] = useState('');
+    const [recognitionFailed, setRecognitionFailed] = useState(false);
+    const mediaRecorder = useRef(null);
+    const audioChunks = useRef([]);
 
-    // Start recording audio
     const startRecording = async () => {
-        audioChunksRef.current = [];
-
         try {
+            setRecognitionFailed(false);
+            setRecognizedText('');
+            audioChunks.current = [];
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.current = new MediaRecorder(stream);
 
-            mediaRecorder.addEventListener('dataavailable', event => {
-                audioChunksRef.current.push(event.data);
-            });
-
-            mediaRecorder.addEventListener('stop', () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-                setRecordedAudio(audioBlob);
-
-                // Send to server for speech recognition
-                sendAudioForRecognition(audioBlob);
-
-                // Stop all tracks on the stream to release the microphone
-                stream.getTracks().forEach(track => track.stop());
-            });
-
-            mediaRecorderRef.current = mediaRecorder;
-            mediaRecorder.start();
-            setIsRecording(true);
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            alert('Could not access microphone. Please check your browser permissions.');
-        }
-    };
-
-    // Stop recording audio
-    const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-        }
-    };
-
-    // Play the demonstration audio for the current word
-    const playDemonstration = async () => {
-        try {
-            setIsPlaying(true);
-
-            const token = localStorage.getItem('token');
-            const response = await axios.post(
-                '/api/synthesize',
-                { text: word },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+            mediaRecorder.current.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.current.push(event.data);
                 }
-            );
+            };
 
-            if (response.data && response.data.audio) {
-                // Create an audio element and play the synthesized speech
-                const audio = new Audio(`data:audio/mp3;base64,${response.data.audio}`);
-                audioRef.current = audio;
+            mediaRecorder.current.onstop = () => {
+                const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+                setAudioBlob(audioBlob);
+                processAudio(audioBlob);
+            };
 
-                audio.addEventListener('ended', () => {
-                    setIsPlaying(false);
-                });
-
-                audio.play();
-            } else {
-                setIsPlaying(false);
-                console.error('No audio data received');
-            }
-        } catch (err) {
-            setIsPlaying(false);
-            console.error('Error playing demonstration:', err);
+            mediaRecorder.current.start();
+            setIsRecording(true);
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            alert('Failed to access microphone. Please make sure you have granted permission.');
         }
     };
 
-    // Send recorded audio to the server for speech recognition
-    const sendAudioForRecognition = async (audioBlob) => {
+    const stopRecording = () => {
+        if (mediaRecorder.current && isRecording) {
+            mediaRecorder.current.stop();
+            setIsRecording(false);
+            // Stop all audio tracks
+            mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
+        }
+    };
+
+    const processAudio = async (blob) => {
         try {
             const formData = new FormData();
-            formData.append('audio', audioBlob);
+            formData.append('audio', blob, 'recording.wav');
 
             const token = localStorage.getItem('token');
             const response = await axios.post('/api/recognize', formData, {
@@ -101,50 +62,73 @@ const SpeechControls = ({ word, onRecognitionComplete }) => {
                 }
             });
 
-            if (response.data && response.data.recognized_text) {
-                onRecognitionComplete(response.data.recognized_text);
+            const text = response.data.recognized_text || '';
+            setRecognizedText(text);
+
+            // Check if the text is actually recognized
+            if (text === '' || text.toLowerCase().includes('não reconhecido')) {
+                setRecognitionFailed(true);
+                // Don't call onRecognitionComplete - we'll retry instead
             } else {
-                onRecognitionComplete('');
-                console.error('No recognized text received');
+                setRecognitionFailed(false);
+                onRecognitionComplete(text, blob);
             }
-        } catch (err) {
-            onRecognitionComplete('');
-            console.error('Error with speech recognition:', err);
+        } catch (error) {
+            console.error('Error processing audio:', error);
+            setRecognitionFailed(true);
         }
+    };
+
+    const retryRecording = () => {
+        // Reset state and start again
+        setRecognitionFailed(false);
+        setRecognizedText('');
+        startRecording();
     };
 
     return (
         <div className="speech-controls">
-            {/* Listen button - plays the demonstration */}
-            <button
-                className="btn btn-primary listen-btn"
-                onClick={playDemonstration}
-                disabled={isPlaying || isRecording}
-            >
-                <FaVolumeUp /> Listen
-            </button>
-
-            {/* Record button - toggles recording state */}
-            {!isRecording ? (
-                <button
-                    className="btn btn-danger record-btn"
-                    onClick={startRecording}
-                    disabled={isPlaying}
-                >
-                    <FaMicrophone /> Record
-                </button>
+            {recognitionFailed ? (
+                <div className="recognition-error">
+                    <div className="error-icon-container">
+                        <FaExclamationTriangle className="error-icon" />
+                    </div>
+                    <p className="error-message">Não consegui entender o que disseste. Por favor, tenta novamente.</p>
+                    <button
+                        className="retry-button"
+                        onClick={retryRecording}
+                        disabled={isLoading}
+                    >
+                        <FaRedo /> Tentar Novamente
+                    </button>
+                </div>
             ) : (
-                <button
-                    className="btn btn-warning stop-btn"
-                    onClick={stopRecording}
-                >
-                    <FaStop /> Stop
-                </button>
+                <>
+                    {isRecording ? (
+                        <button
+                            className="recording-button"
+                            onClick={stopRecording}
+                            disabled={isLoading}
+                        >
+                            <FaStop /> Parar
+                        </button>
+                    ) : (
+                        <button
+                            className="start-button"
+                            onClick={startRecording}
+                            disabled={isLoading}
+                        >
+                            <FaMicrophone /> Gravar
+                        </button>
+                    )}
+                </>
             )}
 
-            {/* Status messages */}
-            {isPlaying && <div className="status-message">Playing demonstration...</div>}
-            {isRecording && <div className="status-message recording">Recording... Speak now!</div>}
+            {recognizedText && !recognitionFailed && (
+                <div className="recognized-text-container">
+                    <p>Texto reconhecido: <span className="recognized-text">{recognizedText}</span></p>
+                </div>
+            )}
         </div>
     );
 };

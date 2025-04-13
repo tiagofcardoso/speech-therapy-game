@@ -77,8 +77,15 @@ function App() {
             }
           />
 
-          {/* Nova rota para jogar */}
-          <Route path="/play/:gameId" element={<GamePlay />} />
+          {/* Nova rota para jogar - agora com PrivateRoute */}
+          <Route
+            path="/play/:gameId"
+            element={
+              <PrivateRoute>
+                <GamePlay />
+              </PrivateRoute>
+            }
+          />
 
           {/* Redirecionar para dashboard se o usuário tentar acessar a raiz */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

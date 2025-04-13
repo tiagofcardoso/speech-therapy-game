@@ -1,0 +1,304 @@
+.user-progress-widget {
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.progress-header-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.progress-header-main h3 {
+    margin: 0;
+    color: #333;
+    font-weight: 600;
+}
+
+.progress-icon-main {
+    font-size: 24px;
+    color: #4a6cfa;
+}
+
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.active-game-progress,
+.no-active-game {
+    background-color: #f8faff;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.progress-icon {
+    font-size: 18px;
+    margin-right: 10px;
+    color: #4a6cfa;
+}
+
+.progress-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.game-details {
+    margin-bottom: 15px;
+}
+
+.game-type {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #2c3e50;
+}
+
+.difficulty-label {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+}
+
+.difficulty {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.difficulty.iniciante {
+    background-color: #a8f0c6;
+    color: #2d6a4f;
+}
+
+.difficulty.médio {
+    background-color: #ffd166;
+    color: #7d5700;
+}
+
+.difficulty.avançado {
+    background-color: #ef476f;
+    color: #ffffff;
+}
+
+.score-display {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.score-icon {
+    color: #ffd700;
+    font-size: 20px;
+    margin-right: 10px;
+}
+
+.score {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #2c3e50;
+}
+
+.progress-bar-container {
+    margin-bottom: 15px;
+}
+
+.progress-bar-container label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    color: #7f8c8d;
+}
+
+.continue-button,
+.new-game-button,
+.start-game-button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.continue-button {
+    background-color: #4a6cfa;
+    color: white;
+}
+
+.new-game-button,
+.start-game-button {
+    background-color: #3dd1d7;
+    color: white;
+}
+
+.continue-button:hover,
+.new-game-button:hover,
+.start-game-button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.last-activity {
+    margin-bottom: 0;
+}
+
+.score-label,
+.completed-label {
+    margin: 8px 0;
+    font-size: 0.9rem;
+    color: #7f8c8d;
+}
+
+.no-progress {
+    text-align: center;
+    padding: 20px 10px;
+}
+
+.no-progress p {
+    margin-bottom: 15px;
+    color: #7f8c8d;
+}
+
+.level-progress {
+    margin-top: 25px;
+    background-color: #f0f7ff;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.level-progress h4 {
+    margin: 0 0 15px 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.level-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.current-level,
+.next-level {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.current-level {
+    background-color: #4a6cfa;
+    color: white;
+}
+
+.next-level {
+    background-color: #8cabff;
+    color: white;
+}
+
+.level-arrow {
+    margin: 0 15px;
+    color: #4a6cfa;
+    font-size: 18px;
+}
+
+.level-message {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    text-align: center;
+    color: #4a6cfa;
+}
+
+.progress-widget-loading,
+.progress-widget-error {
+    text-align: center;
+    padding: 30px;
+    border-radius: 12px;
+    background-color: #f8f9fa;
+}
+
+.progress-widget-loading {
+    color: #6c757d;
+}
+
+.progress-widget-error {
+    color: #dc3545;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+}
+
+.refresh-button {
+    background: none;
+    border: none;
+    color: #4a6cfa;
+    cursor: pointer;
+    margin-left: 8px;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.refresh-button:hover {
+    background-color: rgba(74, 108, 250, 0.1);
+}
+
+.refresh-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

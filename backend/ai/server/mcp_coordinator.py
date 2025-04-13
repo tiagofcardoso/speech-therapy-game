@@ -21,11 +21,11 @@ from ai.agents.progression_manager_agent import ProgressionManagerAgent
 from ai.agents.tutor_agent import TutorAgent
 
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(name)s - %(levelname%s - %(message)s')
 
 
 class MCPCoordinator:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, db_connector=None):
         self.logger = logging.getLogger('MCPCoordinator')
         load_dotenv()
 
@@ -35,6 +35,7 @@ class MCPCoordinator:
 
         self.client = OpenAI(api_key=self.api_key)
         self.sessions = {}
+        self.db_connector = db_connector  # Salvar o db_connector
 
         self.game_designer = GameDesignerAgent()
         self.progression_manager = ProgressionManagerAgent()
@@ -101,6 +102,33 @@ class MCPCoordinator:
 
     def process_response(self, session: Dict[str, Any], recognized_text: str) -> Dict[str, Any]:
         try:
+            # Verificar se o texto foi reconhecido
+            if not recognized_text or recognized_text == "Texto não reconhecido":
+                # Gerar feedback para texto não reconhecido
+                no_recognition_feedback = {
+                    "praise": "Não consegui entender o que disseste. Por favor, tenta novamente falando mais claramente.",
+                    "correction": "Fala um pouco mais alto e claro.",
+                    "tip": "Tenta posicionar o microfone mais perto da boca.",
+                    "encouragement": "Tu consegues!"
+                }
+
+                # Sintetizar áudio para o feedback, se necessário
+                if self.tutor.voice_enabled:
+                    try:
+                        no_recognition_feedback["audio"] = synthesize_speech(
+                            no_recognition_feedback["praise"])
+                    except Exception as e:
+                        self.logger.error(
+                            f"Erro ao sintetizar feedback para texto não reconhecido: {str(e)}")
+
+                return {
+                    "session_complete": False,
+                    "feedback": no_recognition_feedback,
+                    "current_exercise": session.get("current_exercise"),
+                    "repeat_exercise": True,
+                    "recognition_failed": True
+                }
+
             user_id = session["user_id"]
             current_index = session.get("current_index", 0)
             exercises = session.get("exercises", [])
@@ -131,6 +159,14 @@ class MCPCoordinator:
                     "is_correct": is_correct,
                     "score": feedback["score"]
                 })
+
+                # Atualizar o progresso no GameDesigner, passando o db_connector
+                self.game_designer.update_progress(
+                    user_id, feedback["score"], self.db_connector)
+
+            # Salvar a sessão atualizada no banco de dados
+            if self.db_connector:
+                self.db_connector.save_session(session)
 
             session_complete = session["current_index"] >= len(exercises)
             if session_complete:

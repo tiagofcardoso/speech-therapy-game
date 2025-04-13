@@ -21,6 +21,7 @@ const GamePlay = () => {
     const [audioVolume, setAudioVolume] = useState(0);
     const [audioLevels, setAudioLevels] = useState(Array(10).fill(0));
     const [feedbackAudio, setFeedbackAudio] = useState(null);
+    const [sessionId, setSessionId] = useState(null); // New state to store the session ID
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const audioAnalyzerRef = useRef(null);
@@ -28,6 +29,13 @@ const GamePlay = () => {
     const analyserIntervalRef = useRef(null);
 
     useEffect(() => {
+        // Tentar restaurar sessionId do localStorage para jogo em andamento
+        const savedSessionId = localStorage.getItem(`game_session_${gameId}`);
+        if (savedSessionId) {
+            console.log(`📋 Restaurando sessão salva para o jogo ${gameId}: ${savedSessionId}`);
+            setSessionId(savedSessionId);
+        }
+
         // Fetch game data when component mounts
         const fetchGame = async () => {
             try {
@@ -36,6 +44,9 @@ const GamePlay = () => {
                 if (response.data.success) {
                     console.log("Game data received:", response.data.game);
                     setGame(response.data.game);
+
+                    // Create a game session after loading the game
+                    createGameSession(response.data.game);
                 } else {
                     setError("Não foi possível carregar o jogo");
                 }
@@ -49,6 +60,67 @@ const GamePlay = () => {
 
         fetchGame();
     }, [gameId]);
+
+    // Function to create a game session
+    const createGameSession = async (gameData) => {
+        try {
+            console.log("🎮 Criando sessão de jogo:", gameData.title);
+            console.log("🆔 Game ID:", gameId);
+
+            // Verificar se já temos um sessionId
+            if (sessionId) {
+                console.log("Já existe uma sessão ativa:", sessionId);
+                return sessionId;
+            }
+
+            // Dados para criar a sessão
+            const sessionData = {
+                game_id: gameId,
+                difficulty: gameData.difficulty || 'iniciante',
+                title: gameData.title,
+                game_type: gameData.game_type || 'exercícios de pronúncia',
+            };
+
+            console.log("📤 Enviando dados para criar sessão:", sessionData);
+
+            // Create a session specifically linked to this game
+            const response = await api.post('/api/start_game', sessionData);
+
+            console.log("📥 Resposta da criação de sessão:", response.data);
+
+            // Verificar se a resposta contém um session_id
+            if (response.data && response.data.session_id) {
+                const newSessionId = response.data.session_id;
+                console.log(`✅ Session ID recebido e salvo: ${newSessionId}`);
+                setSessionId(newSessionId);
+
+                // Salvar o sessionId no localStorage para persistência
+                localStorage.setItem(`game_session_${gameId}`, newSessionId);
+
+                return newSessionId;
+            } else {
+                console.error("❌ Nenhum session_id encontrado na resposta:", response.data);
+
+                // Verificar se há outro formato possível na resposta
+                if (response.data && response.data.id) {
+                    console.log("✅ Encontrado ID alternativo na resposta:", response.data.id);
+                    setSessionId(response.data.id);
+                    localStorage.setItem(`game_session_${gameId}`, response.data.id);
+                    return response.data.id;
+                }
+
+                throw new Error("Formato de resposta inválido - session_id não encontrado");
+            }
+        } catch (err) {
+            console.error("❌ Erro ao criar sessão de jogo:", err);
+            console.error("Detalhes do erro:", err.response?.data || err.message);
+            // Tente uma abordagem alternativa se a API falhar
+            const fallbackSessionId = `fallback_${gameId}_${Date.now()}`;
+            console.warn("⚠️ Usando session ID de fallback:", fallbackSessionId);
+            setSessionId(fallbackSessionId);
+            return fallbackSessionId;
+        }
+    };
 
     const startRecording = async () => {
         try {
@@ -198,13 +270,39 @@ const GamePlay = () => {
     };
 
     const moveToNextExercise = () => {
+        // Sempre logar o clique no botão
+        console.log("Botão clicado: moveToNextExercise");
+        console.log("Estado atual: exercício", currentExerciseIndex + 1, "de", game.content?.length || 0);
+
         if (currentExerciseIndex < (game.content?.length || 0) - 1) {
+            console.log("Avançando para o próximo exercício...");
             setCurrentExerciseIndex(prev => prev + 1);
             setFeedback(null);
             setFeedbackAudio(null);
         } else {
-            // Game complete
-            setGameComplete(true);
+            // Game complete - salvar progresso
+            console.log("***** BOTÃO FINALIZAR JOGO CLICADO *****");
+            console.log("Completando jogo com:", {
+                gameId: gameId,
+                sessionId: sessionId,
+                currentExerciseIndex: currentExerciseIndex,
+                totalExercises: game.content?.length,
+                score: score
+            });
+
+            saveGameProgress('complete')
+                .then((response) => {
+                    console.log("Progresso salvo com sucesso:", response);
+                    console.log("Exibindo tela de conclusão do jogo");
+                    setGameComplete(true);
+                })
+                .catch(err => {
+                    console.error("ERRO AO SALVAR PROGRESSO:", err);
+                    console.error("Detalhes do erro:", err.response?.data || err.message);
+                    // Ainda mostra a tela de conclusão mesmo se falhar
+                    console.warn("Exibindo tela de conclusão mesmo com erro");
+                    setGameComplete(true);
+                });
         }
     };
 
@@ -282,6 +380,124 @@ const GamePlay = () => {
         );
     }
 
+    // Função para salvar o progresso e a pontuação na base de dados
+    const saveGameProgress = async (completionOption) => {
+        try {
+            if (!sessionId) {
+                console.warn('No session ID available, cannot save game progress');
+                console.warn('Dados da sessão não disponíveis:', {
+                    gameId: gameId,
+                    game: game?.title
+                });
+                return;
+            }
+
+            // Calcular a pontuação final como porcentagem
+            const finalScore = Math.min(100, (score / ((game.content?.length || 1) * 10)) * 100);
+
+            console.log(`----- INICIANDO SALVAMENTO DE PROGRESSO ------`);
+            console.log(`Dados do jogo:\n- ID do jogo: ${gameId}\n- ID da sessão: ${sessionId}\n- Pontuação: ${finalScore}\n- Opção: ${completionOption}`);
+
+            // Criar objeto de dados para maior clareza
+            const requestData = {
+                session_id: sessionId,
+                completed_manually: true,
+                completion_option: completionOption,
+                final_score: finalScore
+            };
+
+            console.log("Enviando dados para o backend:", JSON.stringify(requestData, null, 2));
+            console.log("Chamando endpoint: /api/game/finish");
+
+            // Enviar dados para o backend com cabeçalhos de autenticação explícitos
+            const authToken = localStorage.getItem('token');
+            console.log("Token de autenticação disponível:", !!authToken);
+
+            const response = await api.post('/api/game/finish', requestData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            console.log('RESPOSTA DO SERVIDOR:', response.status);
+            console.log('Dados da resposta:', response.data);
+            return response.data;
+        } catch (err) {
+            console.error('⚠️ ERRO AO SALVAR PROGRESSO DO JOGO ⚠️');
+            console.error('URL da requisição:', err.config?.url);
+            console.error('Método da requisição:', err.config?.method);
+            console.error('Status de erro:', err.response?.status);
+            console.error('Mensagem de erro:', err.response?.data || err.message);
+
+            if (err.response) {
+                console.error('Detalhes da resposta de erro:', err.response.data);
+            } else if (err.request) {
+                console.error('Sem resposta recebida. Detalhes da requisição:', err.request);
+            }
+
+            throw err;
+        }
+    };
+
+    // Função para iniciar um novo jogo
+    const startNewGame = async () => {
+        try {
+            console.log("Starting new game...");
+            // Salvar o progresso do jogo atual
+            await saveGameProgress('next_game');
+            console.log("Progress saved with 'next_game' option, redirecting to game selection");
+
+            // Redirecionar para a página de geração de jogos
+            navigate('/gigi-games');
+        } catch (err) {
+            console.error('Erro ao iniciar novo jogo:', err);
+            // Still redirect even if saving fails
+            navigate('/gigi-games');
+        }
+    };
+
+    // Função para jogar novamente o mesmo jogo
+    const playAgain = async () => {
+        try {
+            console.log("Restarting game...");
+            // Salvar o progresso do jogo atual
+            await saveGameProgress('play_again');
+            console.log("Progress saved with 'play_again' option, resetting game state");
+
+            // Reiniciar o jogo atual
+            setCurrentExerciseIndex(0);
+            setScore(0);
+            setGameComplete(false);
+            setFeedback(null);
+            setFeedbackAudio(null);
+        } catch (err) {
+            console.error('Erro ao reiniciar jogo:', err);
+            // Still reset the game even if saving fails
+            setCurrentExerciseIndex(0);
+            setScore(0);
+            setGameComplete(false);
+            setFeedback(null);
+            setFeedbackAudio(null);
+        }
+    };
+
+    // Função para voltar ao dashboard
+    const handleReturnToDashboard = async () => {
+        try {
+            console.log("Returning to dashboard...");
+            // Salvar o progresso do jogo atual
+            await saveGameProgress('return_to_dashboard');
+            console.log("Progress saved with 'return_to_dashboard' option, navigating to dashboard");
+
+            // Voltar ao dashboard
+            returnToDashboard();
+        } catch (err) {
+            console.error('Erro ao voltar ao dashboard:', err);
+            returnToDashboard(); // Voltar mesmo se houver erro
+        }
+    };
+
     if (gameComplete) {
         return (
             <div className="game-play-complete">
@@ -303,18 +519,18 @@ const GamePlay = () => {
                 </div>
 
                 <div className="game-complete-actions">
-                    <button onClick={returnToDashboard}>Voltar ao Início</button>
+                    <button onClick={handleReturnToDashboard}>Voltar ao Início</button>
                     <button
-                        onClick={() => {
-                            setCurrentExerciseIndex(0);
-                            setScore(0);
-                            setGameComplete(false);
-                            setFeedback(null);
-                            setFeedbackAudio(null);
-                        }}
+                        onClick={playAgain}
                         className="play-again-button"
                     >
                         Jogar Novamente
+                    </button>
+                    <button
+                        onClick={startNewGame}
+                        className="next-game-button"
+                    >
+                        Próximo Jogo
                     </button>
                 </div>
             </div>
@@ -400,7 +616,7 @@ const GamePlay = () => {
             </div>
 
             <div className="game-play-footer">
-                <button onClick={returnToDashboard} className="exit-button">
+                <button onClick={handleReturnToDashboard} className="exit-button">
                     Sair do Jogo
                 </button>
                 <div className="score-display">

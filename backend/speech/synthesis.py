@@ -15,17 +15,16 @@ load_dotenv()
 
 # TTS Configuration
 TTS_SERVICE = os.environ.get(
-    "TTS_SERVICE", "AMAZON")  # Default to Amazon Polly
+    "TTS_SERVICE", "AMAZON")
 AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.environ.get("AWS_SECRET_KEY")
-# Ireland region is good for European users
 AWS_REGION = os.environ.get("AWS_REGION", "eu-west-1")
 
 # Voice settings for Portuguese (European)
 DEFAULT_VOICE_SETTINGS = {
     "AMAZON": {
-        "voice_id": "Ines",  # Female European Portuguese voice
-        "engine": "standard",  # Use standard engine since neural has limitations
+        "voice_id": "Ines",
+        "engine": "standard",
         "language_code": "pt-PT",
         "sample_rate": "22050"
     },
