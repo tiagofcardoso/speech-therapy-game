@@ -540,6 +540,53 @@
     transform: scale(1.1);
 }
 
+/* Estilo para o reprodutor de áudio de palavras - reposicionado abaixo do mascote */
+.word-audio-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(76, 175, 80, 0.08);
+    /* Verde mais suave para combinar com o botão */
+    padding: 15px;
+    border-radius: 12px;
+    margin: 5px auto 20px;
+    max-width: 320px;
+    /* Limita a largura para centralização */
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    border: 1px dashed rgba(76, 175, 80, 0.3);
+    /* Borda pontilhada sutil */
+    position: relative;
+    z-index: 10;
+}
+
+.word-audio-player p {
+    margin-bottom: 12px;
+    font-weight: 600;
+    color: #388E3C;
+    /* Verde que combina com o botão */
+    letter-spacing: 0.2px;
+}
+
+.repeat-audio-button {
+    margin-top: 12px;
+    background-color: #E8F5E9;
+    /* Fundo verde bem claro */
+    border: 1px solid #4CAF50;
+    color: #388E3C;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.repeat-audio-button:hover {
+    background-color: #4CAF50;
+    color: white;
+    transform: scale(1.05);
+}
+
 @media (max-width: 768px) {
     .exercise-container {
         padding: 20px;

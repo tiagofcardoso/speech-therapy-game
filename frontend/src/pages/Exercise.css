@@ -224,6 +224,47 @@
     font-size: 14px;
 }
 
+/* Estilo para o reprodutor de áudio de palavras */
+.word-audio-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(156, 39, 176, 0.05);
+    padding: 15px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.word-audio-player p {
+    margin-bottom: 10px;
+    font-weight: 500;
+    color: #333;
+}
+
+.repeat-audio-button {
+    margin-top: 10px;
+    background-color: transparent;
+    border: 1px solid #9c27b0;
+    color: #9c27b0;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.repeat-audio-button:hover {
+    background-color: rgba(156, 39, 176, 0.1);
+    transform: scale(1.05);
+}
+
+.loading-audio {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    margin: 10px 0;
+}
+
 @media (max-width: 768px) {
     .exercise-header {
         flex-direction: column;

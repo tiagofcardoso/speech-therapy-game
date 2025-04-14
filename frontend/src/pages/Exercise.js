@@ -5,6 +5,7 @@ import phoneticAnalyzer from '../utils/phoneticAnalyzer';
 import PhoneticFeedback from '../components/PhoneticFeedback';
 import AvatarRenderer from '../components/Avatar/AvatarRenderer';
 import { getMockLipsyncForWord } from '../services/mockApi';
+import AudioPlayer from '../components/AudioPlayer'; // Importar o AudioPlayer
 import './Exercise.css';
 
 const Exercise = () => {
@@ -24,13 +25,13 @@ const Exercise = () => {
     const [phoneticAnalysis, setPhoneticAnalysis] = useState(null);
     const [avatarData, setAvatarData] = useState(null);
     const [playingAvatar, setPlayingAvatar] = useState(false);
+    const [wordAudio, setWordAudio] = useState(null); // Estado para o áudio da palavra atual
+    const [isLoadingAudio, setIsLoadingAudio] = useState(false); // Indicador de carregamento do áudio
 
-    // Usar refs para manter valores atualizados em callbacks assíncronos
     const recognitionRef = useRef(null);
     const wordsRef = useRef([]);
     const currentWordIndexRef = useRef(0);
 
-    // Atualizar refs quando os estados mudarem
     useEffect(() => {
         wordsRef.current = words;
     }, [words]);
@@ -39,13 +40,11 @@ const Exercise = () => {
         currentWordIndexRef.current = currentWordIndex;
     }, [currentWordIndex]);
 
-    // Carregar dados do exercício
     useEffect(() => {
         const loadExercise = async () => {
             try {
                 setLoading(true);
 
-                // Dados de fallback para caso a API falhe
                 const fallbackExercises = {
                     "1": {
                         id: 1,
@@ -77,18 +76,15 @@ const Exercise = () => {
                     }
                 };
 
-                // Usar dados de fallback diretamente - para simplicidade
                 console.log("Usando dados de fallback para o exercício");
                 const fallbackExercise = fallbackExercises[exerciseId] || fallbackExercises["1"];
                 setExercise(fallbackExercise);
                 setWords(fallbackExercise.words);
-                // Atualizar a ref imediatamente
                 wordsRef.current = fallbackExercise.words;
                 setUsingFallbackData(true);
                 console.log("Palavras carregadas (fallback):", fallbackExercise.words);
                 setLoading(false);
 
-                // Tentar buscar da API em segundo plano
                 try {
                     const response = await api.get(`/api/exercises/${exerciseId}`);
                     if (response.data.success) {
@@ -106,7 +102,6 @@ const Exercise = () => {
 
         loadExercise();
 
-        // Configurar o reconhecimento de fala
         if ('webkitSpeechRecognition' in window) {
             const recognition = new window.webkitSpeechRecognition();
             recognition.continuous = false;
@@ -116,7 +111,6 @@ const Exercise = () => {
                 const speechResult = event.results[0][0].transcript.toLowerCase();
                 setTranscript(speechResult);
 
-                // Usar os valores das refs em vez dos estados
                 const currentWords = wordsRef.current;
                 const wordIndex = currentWordIndexRef.current;
 
@@ -126,7 +120,6 @@ const Exercise = () => {
                     speechResult
                 });
 
-                // Verificar se temos palavras antes de tentar verificar a pronúncia
                 if (currentWords && currentWords.length > 0 && wordIndex < currentWords.length) {
                     checkPronunciationWithRefs(speechResult, currentWords, wordIndex);
                 } else {
@@ -150,23 +143,20 @@ const Exercise = () => {
         }
 
         return () => {
-            // Limpar o reconhecimento de fala ao desmontar
             if (recognitionRef.current) {
                 recognitionRef.current.abort();
             }
         };
     }, [exerciseId]);
 
-    // Modifique a função checkPronunciationWithRefs para usar a análise fonética
     const checkPronunciationWithRefs = (spoken, currentWords, wordIndex) => {
         const currentWord = currentWords[wordIndex].text.toLowerCase();
 
-        // Configurações de análise baseadas no nível do exercício
         const analysisOptions = {
             threshold: exercise?.difficulty === 'beginner' ? 70 :
                 exercise?.difficulty === 'intermediate' ? 80 : 85,
             strictMode: exercise?.difficulty === 'advanced',
-            focusOnSound: exercise?.focusSound // Adicionaremos isso nos dados do exercício
+            focusOnSound: exercise?.focusSound
         };
 
         console.log("Verificando pronúncia com análise fonética:", {
@@ -177,13 +167,11 @@ const Exercise = () => {
             opcoes: analysisOptions
         });
 
-        // Realizar análise fonética
         const analysis = phoneticAnalyzer.isPhoneticMatch(spoken, currentWord, analysisOptions.threshold);
-        setPhoneticAnalysis(analysis);  // Salvar a análise no estado
+        setPhoneticAnalysis(analysis);
 
         console.log("Resultado da análise fonética:", analysis);
 
-        // Registrar evento de STT no console (modo local)
         console.log("Evento STT (local):", {
             exerciseId,
             word: currentWord,
@@ -193,9 +181,7 @@ const Exercise = () => {
             similarity: analysis.similarity
         });
 
-        // Feedback baseado na análise fonética
         if (analysis.match) {
-            // Feedback personalizado baseado na pontuação de similaridade
             let feedbackMessage = '';
 
             if (analysis.exactMatch || analysis.similarity > 95) {
@@ -209,35 +195,30 @@ const Exercise = () => {
             setFeedback(feedbackMessage);
             setScore(prevScore => prevScore + 10);
 
-            // Mostrar detalhes da pronúncia se não for uma correspondência exata
             if (!analysis.exactMatch && analysis.similarity < 95) {
                 setTimeout(() => {
                     setFeedback(prev => `${prev} (Similaridade: ${analysis.similarity}%)`);
                 }, 500);
             }
 
-            // Passar para a próxima palavra após um breve atraso
             setTimeout(() => {
                 if (wordIndex < currentWords.length - 1) {
                     setCurrentWordIndex(prevIndex => prevIndex + 1);
                     setTranscript('');
                     setFeedback('');
-                    setPhoneticAnalysis(null);  // Resetar a análise fonética
+                    setPhoneticAnalysis(null);
                 } else {
                     setCompleted(true);
-                    // Resultado salvo apenas no console
                     console.log("Exercício completo:", {
                         exerciseId,
-                        score: score + 10, // Adicionar a pontuação atual
+                        score: score + 10,
                         completedWords: currentWords.length
                     });
                 }
             }, 1500);
         } else {
-            // Feedback para pronúncia incorreta com dicas
             let feedbackMessage = `Tente novamente. A palavra era "${currentWord}".`;
 
-            // Adicionar dicas específicas para erros comuns
             if (analysis.possibleErrors && analysis.possibleErrors.length > 0) {
                 const error = analysis.possibleErrors[0];
                 feedbackMessage += ` Tente prestar atenção especial ao som "${error.type.replace(/[\/\^$]/g, '')}" no início da palavra.`;
@@ -249,13 +230,11 @@ const Exercise = () => {
         }
     };
 
-    // A função original é mantida para compatibilidade mas não é usada
     const checkPronunciation = (spoken) => {
         console.warn("Função antiga checkPronunciation chamada - deve usar checkPronunciationWithRefs");
     };
 
     const startListening = () => {
-        // Verificação adicional para depuração
         console.log("startListening - Estado atual:", {
             wordsState: words.length,
             wordsRef: wordsRef.current.length,
@@ -263,7 +242,6 @@ const Exercise = () => {
             currentWordIndexRef: currentWordIndexRef.current
         });
 
-        // Verificar se temos palavras para reconhecer usando a ref
         if (!wordsRef.current || wordsRef.current.length === 0) {
             setFeedback('Erro: Nenhuma palavra para praticar. Tente recarregar a página.');
             return;
@@ -283,30 +261,23 @@ const Exercise = () => {
         try {
             setAvatarData(null);
 
-            // Generate speech using browser's speech synthesis
             const generateSpeech = () => {
                 return new Promise((resolve) => {
                     if ('speechSynthesis' in window) {
-                        // Create a speak request
                         const utterance = new SpeechSynthesisUtterance(word);
                         utterance.lang = 'pt-BR';
 
-                        // Get the expected duration (rough estimate)
-                        const estimatedDuration = word.length * 0.1; // 100ms per character is a rough estimate
+                        const estimatedDuration = word.length * 0.1;
 
-                        // Generate mock lipsync data
                         const mockData = getMockLipsyncForWord(word);
 
-                        // When the component is ready, play the audio
                         resolve({
                             word,
                             lipsyncData: mockData.lipsyncData,
-                            // Instead of audio data, we'll speak directly when animation starts
-                            audioSrc: 'silent', // Will be handled specially
-                            useWebSpeech: true  // Flag to use web speech API
+                            audioSrc: 'silent',
+                            useWebSpeech: true
                         });
                     } else {
-                        // Fallback to mock data
                         const mockData = getMockLipsyncForWord(word);
                         resolve({
                             word,
@@ -318,7 +289,6 @@ const Exercise = () => {
                 });
             };
 
-            // Get the avatar data
             const data = await generateSpeech();
             setAvatarData(data);
         } catch (error) {
@@ -326,8 +296,34 @@ const Exercise = () => {
         }
     };
 
+    const fetchWordAudio = async (word) => {
+        if (!word) return;
+
+        try {
+            setIsLoadingAudio(true);
+            const response = await api.post('/api/synthesize-speech', {
+                text: word,
+                voice_settings: {
+                    language_code: 'pt-PT'
+                }
+            });
+
+            if (response.data && response.data.audio_data) {
+                setWordAudio(response.data.audio_data);
+                console.log('Áudio recebido para a palavra:', word);
+            } else {
+                console.warn('Nenhum áudio recebido para a palavra:', word);
+            }
+        } catch (err) {
+            console.error('Erro ao obter áudio da palavra:', err);
+        } finally {
+            setIsLoadingAudio(false);
+        }
+    };
+
     useEffect(() => {
         if (words && words.length > 0 && currentWordIndex < words.length) {
+            fetchWordAudio(words[currentWordIndex].text);
             fetchAvatarData(words[currentWordIndex].text);
         }
     }, [currentWordIndex, words]);
@@ -347,7 +343,6 @@ const Exercise = () => {
         </div>
     );
 
-    // Verificar se temos exercício e palavras antes de renderizar
     if (!exercise || !words || words.length === 0) {
         return (
             <div className="exercise-error">
@@ -385,6 +380,34 @@ const Exercise = () => {
                         <div className="current-word-container">
                             <h2 className="current-word">{currentWord.text}</h2>
                             <p className="word-hint">Dica: {currentWord.hint}</p>
+
+                            {wordAudio && (
+                                <div className="word-audio-player">
+                                    <p>Ouça a pronúncia correta:</p>
+                                    <AudioPlayer
+                                        audioData={wordAudio}
+                                        autoPlay={true}
+                                        onPlayComplete={() => console.log("Reprodução da palavra concluída")}
+                                    />
+                                    <button
+                                        className="repeat-audio-button"
+                                        onClick={() => {
+                                            setWordAudio(null);
+                                            setTimeout(() => {
+                                                setWordAudio(wordAudio);
+                                            }, 50);
+                                        }}
+                                    >
+                                        Ouvir novamente
+                                    </button>
+                                </div>
+                            )}
+
+                            {isLoadingAudio && (
+                                <div className="loading-audio">
+                                    <p>Carregando áudio...</p>
+                                </div>
+                            )}
                         </div>
 
                         {avatarData && (
@@ -398,7 +421,6 @@ const Exercise = () => {
                                 <button
                                     className="replay-button"
                                     onClick={() => {
-                                        // Recreate the avatar data to trigger a replay
                                         setPlayingAvatar(true);
                                         const currentData = { ...avatarData };
                                         setAvatarData(null);

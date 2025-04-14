@@ -25,6 +25,8 @@ const GamePlay = () => {
     const [sessionId, setSessionId] = useState(null); // New state to store the session ID
     const [mascotMood, setMascotMood] = useState('neutral');
     const [mascotMessage, setMascotMessage] = useState(null);
+    const [wordAudio, setWordAudio] = useState(null); // State to store the current word audio
+    const [isLoadingAudio, setIsLoadingAudio] = useState(false); // State to indicate audio loading
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const audioAnalyzerRef = useRef(null);
@@ -49,7 +51,16 @@ const GamePlay = () => {
                     setGame(response.data.game);
 
                     // Create a game session after loading the game
-                    createGameSession(response.data.game);
+                    const sessionId = await createGameSession(response.data.game);
+
+                    // Pré-carregar o áudio da primeira palavra após criar a sessão
+                    if (response.data.game.content && response.data.game.content.length > 0) {
+                        const firstWord = response.data.game.content[0].word;
+                        if (firstWord) {
+                            console.log("🎯 Pré-carregando áudio da primeira palavra:", firstWord);
+                            fetchAudioForWord(firstWord);
+                        }
+                    }
                 } else {
                     setError("Não foi possível carregar o jogo");
                 }
@@ -122,6 +133,89 @@ const GamePlay = () => {
             console.warn("⚠️ Usando session ID de fallback:", fallbackSessionId);
             setSessionId(fallbackSessionId);
             return fallbackSessionId;
+        }
+    };
+
+    useEffect(() => {
+        const fetchWordAudio = async () => {
+            const currentExercise = getCurrentExercise();
+            if (!currentExercise || !currentExercise.word) return;
+
+            try {
+                setIsLoadingAudio(true);
+                console.log(`🔊 Solicitando áudio para a palavra: "${currentExercise.word}"`);
+
+                const response = await api.post('/api/synthesize-speech', {
+                    text: currentExercise.word,
+                    voice_settings: {
+                        language_code: 'pt-PT' // ou 'pt-BR' dependendo da variante desejada
+                    }
+                });
+
+                console.log('📨 Resposta da API de síntese:', response.status, response.statusText);
+
+                if (response.data && response.data.audio_data) {
+                    console.log('✅ Áudio recebido com sucesso para a palavra:', currentExercise.word);
+                    setWordAudio(response.data.audio_data);
+                } else {
+                    console.warn('⚠️ Resposta da API não contém dados de áudio:', response.data);
+                }
+            } catch (err) {
+                console.error("❌ Erro ao obter áudio da palavra:", err);
+                console.error("Detalhes:", err.response?.data || err.message);
+
+                // Tentar novamente após um curto atraso
+                setTimeout(() => {
+                    console.log("🔄 Tentando novamente buscar o áudio...");
+                    fetchWordAudio();
+                }, 2000);
+            } finally {
+                setIsLoadingAudio(false);
+            }
+        };
+
+        // Chamar imediatamente quando o exercício atual mudar
+        fetchWordAudio();
+    }, [currentExerciseIndex]);
+
+    // Função auxiliar para buscar áudio para uma palavra específica
+    const fetchAudioForWord = async (word) => {
+        if (!word) return;
+
+        try {
+            setIsLoadingAudio(true);
+            console.log(`🎧 Buscando áudio para a palavra "${word}"`);
+
+            const response = await api.post('/api/synthesize-speech', {
+                text: word,
+                voice_settings: {
+                    language_code: 'pt-PT'
+                }
+            });
+
+            console.log(`👂 Resposta da API para "${word}":`, response.status);
+
+            if (response.data && response.data.success && response.data.audio_data) {
+                console.log(`🎵 Áudio recebido para "${word}" - autoplay iniciará em breve`);
+                setWordAudio(response.data.audio_data);
+
+                // Definir um mascot message para incentivar a primeira interação
+                if (!mascotMessage) {
+                    setMascotMood('happy');
+                    setMascotMessage(`Vamos praticar! Escuta a palavra "${word}" e depois repete-a.`);
+                }
+            } else {
+                console.warn(`⚠️ Não foi possível obter áudio para "${word}"`, response.data);
+            }
+        } catch (err) {
+            console.error(`❌ Erro ao buscar áudio para "${word}":`, err);
+            // Tentar novamente após um curto atraso se falhar
+            setTimeout(() => {
+                console.log(`🔁 Tentando novamente obter áudio para "${word}"...`);
+                fetchAudioForWord(word);
+            }, 3000);
+        } finally {
+            setIsLoadingAudio(false);
         }
     };
 
@@ -613,6 +707,30 @@ const GamePlay = () => {
                     message={mascotMessage}
                     name="default"
                 />
+
+                {/* Reprodutor de áudio para a palavra atual - movido para depois do mascote */}
+                {wordAudio && (
+                    <div className="word-audio-player">
+                        <p>Ouça a pronúncia correta:</p>
+                        <AudioPlayer
+                            audioData={wordAudio}
+                            autoPlay={true}
+                            onPlayComplete={() => console.log("Reprodução da palavra concluída")}
+                        />
+                        <button
+                            className="repeat-audio-button"
+                            onClick={() => {
+                                // Recria o componente AudioPlayer forçando-o a tocar novamente
+                                setWordAudio(null);
+                                setTimeout(() => {
+                                    setWordAudio(wordAudio);
+                                }, 50);
+                            }}
+                        >
+                            Ouvir novamente
+                        </button>
+                    </div>
+                )}
 
                 <div className="exercise-details">
                     <p className="exercise-description">{currentExercise.prompt || currentExercise.description || "Pronuncie a palavra corretamente"}</p>
