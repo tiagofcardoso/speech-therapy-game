@@ -534,3 +534,459 @@ class DatabaseConnector:
             import traceback
             traceback.print_exc()
             return False
+
+    def get_completed_games(self, user_id):
+        """
+        Busca jogos completos de um usuário diretamente da coleção de jogos
+
+        Args:
+            user_id (str): ID do usuário
+
+        Returns:
+            list: Lista de jogos completos do usuário
+        """
+        try:
+            print(f"Buscando jogos completos para o usuário: {user_id}")
+
+            if self.connected:
+                cursor = self.db.games.find({
+                    "user_id": user_id,
+                    "completed": True
+                }).sort("completed_at", -1)
+
+                games = list(cursor)
+                print(f"Encontrados {len(games)} jogos completos")
+                return games
+
+            # Fallback para armazenamento em memória
+            games = self.in_memory_db.get("games", {}).values()
+            completed_games = [
+                g for g in games
+                if g.get("user_id") == user_id and g.get("completed") == True
+            ]
+
+            return completed_games
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar jogos completos do usuário: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+
+# Funções para atender às requisições da API
+def get_user_history(user_id):
+    """
+    Obtém o histórico de jogos do usuário
+
+    Args:
+        user_id: ID do usuário
+
+    Returns:
+        dict: Histórico de sessões e estatísticas
+    """
+    try:
+        db = DatabaseConnector()
+        # Obter o usuário pelo ID
+        user = db.get_user_by_id(user_id)
+
+        if not user:
+            return {"error": "Usuário não encontrado"}
+
+        # Extrair histórico do usuário ou criar estrutura vazia
+        history = user.get("history", {})
+        if not history:
+            history = {"completed_sessions": [], "statistics": {}}
+
+        # Buscar sessões completadas do usuário
+        sessions = history.get("completed_sessions", [])
+
+        # Calcular estatísticas
+        total_sessions = len(sessions)
+        total_exercises = sum(session.get("exercises_completed", 0)
+                              for session in sessions)
+
+        # Calcular pontuação média
+        if total_sessions > 0:
+            average_score = sum(session.get("score", 0)
+                                for session in sessions) / total_sessions
+        else:
+            average_score = 0
+
+        # Contar sessões por dificuldade
+        sessions_by_difficulty = {
+            "iniciante": 0,
+            "médio": 0,
+            "avançado": 0
+        }
+
+        for session in sessions:
+            difficulty = session.get("difficulty", "iniciante").lower()
+            if difficulty in sessions_by_difficulty:
+                sessions_by_difficulty[difficulty] += 1
+
+        # Estruturar as estatísticas
+        statistics = {
+            "total_sessions": total_sessions,
+            "total_exercises_completed": total_exercises,
+            "average_score": round(average_score, 1),
+            "sessions_by_difficulty": sessions_by_difficulty
+        }
+
+        # Buscar jogos completos na coleção de jogos
+        completed_games = []
+        if db.connected:
+            cursor = db.db.games.find({
+                "user_id": user_id,
+                "completed": True
+            }).sort("completed_at", -1)
+            completed_games = list(cursor)
+
+        # Estruturar resposta final
+        response = {
+            "sessions": sessions,
+            "statistics": statistics,
+            "completed_games": [
+                {
+                    "game_id": str(game.get("_id")),
+                    "title": game.get("title", "Sem título"),
+                    "completed_at": game.get("completed_at"),
+                    "score": game.get("final_score", 0)
+                } for game in completed_games
+            ]
+        }
+
+        return response
+
+    except Exception as e:
+        print(f"❌ Erro ao obter histórico do usuário: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+def get_user_statistics(user_id):
+    """
+    Obtém estatísticas detalhadas do usuário
+
+    Args:
+        user_id: ID do usuário
+
+    Returns:
+        dict: Estatísticas do usuário
+    """
+    try:
+        db = DatabaseConnector()
+        # Obter o usuário pelo ID
+        user = db.get_user_by_id(user_id)
+
+        if not user:
+            return {"error": "Usuário não encontrado"}
+
+        # Obter estatísticas salvas ou criar novas
+        stats = user.get("statistics", {})
+
+        # Obter histórico
+        history = user.get("history", {})
+        sessions = history.get("completed_sessions", [])
+
+        # Calcular estatísticas adicionais
+        total_exercises_completed = stats.get("exercises_completed", 0)
+        accuracy = stats.get("accuracy", 0)
+
+        # Calcular tempo desde registro (em dias)
+        from datetime import datetime
+        created_at = user.get("created_at", datetime.now())
+        days_since_registration = (datetime.now() - created_at).days
+
+        # Determinar nível do usuário baseado nas estatísticas
+        level = "iniciante"
+        if total_exercises_completed > 50 and accuracy > 85:
+            level = "avançado"
+        elif total_exercises_completed > 20 and accuracy > 70:
+            level = "médio"
+
+        # Calcular progresso para o próximo nível
+        level_progress = 0
+        next_level = "médio"
+
+        if level == "iniciante":
+            # Progresso para médio (baseado em exercícios e precisão)
+            ex_progress = min(100, (total_exercises_completed / 20) * 100)
+            acc_progress = min(100, (accuracy / 70) * 100)
+            level_progress = (ex_progress + acc_progress) / 2
+            next_level = "médio"
+        elif level == "médio":
+            # Progresso para avançado
+            ex_progress = min(100, (total_exercises_completed / 50) * 100)
+            acc_progress = min(100, (accuracy / 85) * 100)
+            level_progress = (ex_progress + acc_progress) / 2
+            next_level = "avançado"
+        else:
+            # Avançado é o nível máximo, 100% de progresso
+            level_progress = 100
+            next_level = "avançado+"
+
+        # Mensagem motivacional baseada no progresso
+        if level_progress < 30:
+            message = "Continue praticando para avançar!"
+        elif level_progress < 70:
+            message = f"Você está indo bem no caminho para {next_level}!"
+        else:
+            message = f"Quase lá! Você está muito próximo de alcançar o nível {next_level}!"
+
+        # Criar distribuição por dificuldade
+        difficulty_counts = {"iniciante": 0, "médio": 0, "avançado": 0}
+        for session in sessions:
+            difficulty = session.get("difficulty", "iniciante").lower()
+            if difficulty in difficulty_counts:
+                difficulty_counts[difficulty] += 1
+
+        # Calcular progresso semanal (últimos 7 dias)
+        weekly_progress = []
+        today = datetime.now().date()
+
+        for i in range(6, -1, -1):
+            day_offset = (today - datetime.timedelta(days=i))
+            day_name = ["Segunda", "Terça", "Quarta", "Quinta",
+                        "Sexta", "Sábado", "Domingo"][day_offset.weekday()]
+
+            # Filtrar sessões deste dia
+            day_sessions = [s for s in sessions if
+                            datetime.fromisoformat(s.get("completed_at", "")).date() == day_offset]
+
+            # Calcular média do dia
+            day_avg = sum(s.get("score", 0)
+                          for s in day_sessions) / max(1, len(day_sessions))
+
+            weekly_progress.append({
+                "day": day_name,
+                "count": len(day_sessions),
+                "avg_score": round(day_avg, 1)
+            })
+
+        # Tempo total gasto (estimado - 5 minutos por exercício)
+        total_time_mins = total_exercises_completed * 5
+
+        # Criar objeto de estatísticas completo
+        statistics = {
+            "exercises_completed": total_exercises_completed,
+            "accuracy": accuracy,
+            "current_level": level,
+            "next_level": next_level,
+            "level_progress_percentage": round(level_progress, 1),
+            "level_progress_message": message,
+            "joined_days_ago": days_since_registration,
+            "total_sessions": len(sessions),
+            "average_score": round(sum(s.get("score", 0) for s in sessions) / max(1, len(sessions)), 1),
+            "difficulty_distribution": difficulty_counts,
+            "weekly_progress": weekly_progress,
+            "total_time_spent_mins": total_time_mins,
+            "achievements_count": len(user.get("achievements", {}).get("earned", [])) if "achievements" in user else 0,
+            "last_login": stats.get("last_login", ""),
+            "last_activity": stats.get("last_activity", "")
+        }
+
+        return statistics
+
+    except Exception as e:
+        print(f"❌ Erro ao obter estatísticas do usuário: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+def get_user_achievements(user_id):
+    """
+    Obtém as conquistas do usuário
+
+    Args:
+        user_id: ID do usuário
+
+    Returns:
+        dict: Conquistas do usuário
+    """
+    try:
+        db = DatabaseConnector()
+        user = db.get_user_by_id(user_id)
+
+        if not user:
+            return {"error": "Usuário não encontrado"}
+
+        # Verificar se o usuário tem conquistas salvas
+        achievements = user.get("achievements", {})
+
+        if not achievements:
+            # Criar estrutura padrão de conquistas
+            achievements = {
+                "earned_achievements": [],
+                "in_progress_achievements": [],
+                "total_achievements": 10  # Número total de conquistas disponíveis no sistema
+            }
+
+            # Verificar conquistas automáticas baseadas em estatísticas
+            stats = user.get("statistics", {})
+            history = user.get("history", {})
+            sessions = history.get("completed_sessions", [])
+
+            # Lista de conquistas disponíveis
+            all_achievements = [
+                {
+                    "id": "first_game",
+                    "title": "Primeiro Passo",
+                    "description": "Complete seu primeiro jogo",
+                    "icon": "🎮",
+                    "condition": lambda u: len(sessions) >= 1,
+                    "progress": lambda u: min(1, len(sessions)),
+                    "total": 1
+                },
+                {
+                    "id": "practice_10",
+                    "title": "Praticante Regular",
+                    "description": "Complete 10 exercícios",
+                    "icon": "🏅",
+                    "condition": lambda u: stats.get("exercises_completed", 0) >= 10,
+                    "progress": lambda u: stats.get("exercises_completed", 0),
+                    "total": 10
+                },
+                {
+                    "id": "practice_50",
+                    "title": "Mestre da Prática",
+                    "description": "Complete 50 exercícios",
+                    "icon": "🏆",
+                    "condition": lambda u: stats.get("exercises_completed", 0) >= 50,
+                    "progress": lambda u: stats.get("exercises_completed", 0),
+                    "total": 50
+                },
+                {
+                    "id": "accuracy_master",
+                    "title": "Precisão Perfeita",
+                    "description": "Atinja uma precisão média de 90%",
+                    "icon": "🎯",
+                    "condition": lambda u: stats.get("accuracy", 0) >= 90,
+                    "progress": lambda u: stats.get("accuracy", 0),
+                    "total": 90
+                },
+                {
+                    "id": "beginner_master",
+                    "title": "Mestre Iniciante",
+                    "description": "Complete 5 jogos no nível iniciante com pontuação acima de 80%",
+                    "icon": "🥉",
+                    "condition": lambda u: len([s for s in sessions
+                                               if s.get("difficulty") == "iniciante" and s.get("score", 0) > 80]) >= 5,
+                    "progress": lambda u: len([s for s in sessions
+                                              if s.get("difficulty") == "iniciante" and s.get("score", 0) > 80]),
+                    "total": 5
+                },
+                {
+                    "id": "intermediate_master",
+                    "title": "Mestre Intermediário",
+                    "description": "Complete 5 jogos no nível médio com pontuação acima de 80%",
+                    "icon": "🥈",
+                    "condition": lambda u: len([s for s in sessions
+                                               if s.get("difficulty") == "médio" and s.get("score", 0) > 80]) >= 5,
+                    "progress": lambda u: len([s for s in sessions
+                                              if s.get("difficulty") == "médio" and s.get("score", 0) > 80]),
+                    "total": 5
+                },
+                {
+                    "id": "advanced_master",
+                    "title": "Mestre Avançado",
+                    "description": "Complete 3 jogos no nível avançado com pontuação acima de 90%",
+                    "icon": "🥇",
+                    "condition": lambda u: len([s for s in sessions
+                                               if s.get("difficulty") == "avançado" and s.get("score", 0) > 90]) >= 3,
+                    "progress": lambda u: len([s for s in sessions
+                                              if s.get("difficulty") == "avançado" and s.get("score", 0) > 90]),
+                    "total": 3
+                },
+                {
+                    "id": "daily_streak_7",
+                    "title": "Semana Consistente",
+                    "description": "Pratique por 7 dias consecutivos",
+                    "icon": "📅",
+                    "condition": lambda u: stats.get("consecutive_days", 0) >= 7,
+                    "progress": lambda u: stats.get("consecutive_days", 0),
+                    "total": 7
+                },
+                {
+                    "id": "perfect_score",
+                    "title": "Pontuação Perfeita",
+                    "description": "Obtenha 100% em qualquer jogo",
+                    "icon": "🌟",
+                    "condition": lambda u: any(s.get("score", 0) == 100 for s in sessions),
+                    "progress": lambda u: 1 if any(s.get("score", 0) == 100 for s in sessions) else 0,
+                    "total": 1
+                },
+                {
+                    "id": "explorer",
+                    "title": "Explorador de Sons",
+                    "description": "Jogue 5 jogos com diferentes focos de pronúncia",
+                    "icon": "🔍",
+                    "condition": lambda u: len(set(s.get("game_title", "") for s in sessions)) >= 5,
+                    "progress": lambda u: len(set(s.get("game_title", "") for s in sessions)),
+                    "total": 5
+                }
+            ]
+
+            from datetime import datetime
+
+            # Verificar quais conquistas foram alcançadas
+            earned = []
+            in_progress = []
+
+            for achievement in all_achievements:
+                try:
+                    is_earned = achievement["condition"](user)
+                    progress = achievement["progress"](user)
+                    percentage = min(
+                        100, int((progress / achievement["total"]) * 100))
+
+                    if is_earned:
+                        earned.append({
+                            "id": achievement["id"],
+                            "title": achievement["title"],
+                            "description": achievement["description"],
+                            "icon": achievement["icon"],
+                            "earned_at": datetime.now().isoformat()
+                        })
+                    else:
+                        in_progress.append({
+                            "id": achievement["id"],
+                            "title": achievement["title"],
+                            "description": achievement["description"],
+                            "icon": achievement["icon"],
+                            "progress": progress,
+                            "total": achievement["total"],
+                            "percentage": percentage
+                        })
+                except Exception as e:
+                    print(
+                        f"Erro ao processar conquista {achievement['id']}: {str(e)}")
+
+            # Salvar as conquistas processadas
+            achievements = {
+                "earned_achievements": earned,
+                "in_progress_achievements": in_progress,
+                "total_achievements": len(all_achievements)
+            }
+
+            # Salvar no usuário
+            db.update_user(user_id, {"achievements": achievements})
+
+        return achievements
+
+    except Exception as e:
+        print(f"❌ Erro ao obter conquistas do usuário: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+# Adicionar as funções de exportação
+__all__ = [
+    'DatabaseConnector',
+    'get_user_history',
+    'get_user_statistics',
+    'get_user_achievements'
+]

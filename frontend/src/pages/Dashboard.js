@@ -17,10 +17,16 @@ const Dashboard = () => {
     const [exercises, setExercises] = useState([]);
     const [loading, setLoading] = useState(false);
     const [stats, setStats] = useState({ completed: 0, score: 0, level: 'Iniciante I' });
+    const [journeyStats, setJourneyStats] = useState({
+        challenges_completed: 0,
+        magic_points: 0,
+        adventure_days: 0
+    });
     const [showConfetti, setShowConfetti] = useState(false);
     const [lastLogin, setLastLogin] = useState(null);
     const [dailyStreak, setDailyStreak] = useState(0);
     const [showCharacterTip, setShowCharacterTip] = useState(true);
+    const [refreshCounter, setRefreshCounter] = useState(0);
 
     // Dicas do personagem que guia as crianças
     const tips = [
@@ -33,6 +39,50 @@ const Dashboard = () => {
 
     // Seleciona uma dica aleatória
     const [currentTip, setCurrentTip] = useState(tips[Math.floor(Math.random() * tips.length)]);
+
+    const refreshDashboardData = () => {
+        setRefreshCounter(prev => prev + 1);
+    };
+
+    // Buscar dados da jornada do usuário da API
+    useEffect(() => {
+        const fetchJourneyData = async () => {
+            try {
+                setLoading(true);
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
+
+                const timestamp = new Date().getTime();
+                const response = await api.get(`/api/user/journey?_t=${timestamp}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.data.success) {
+                    setJourneyStats(response.data.journey);
+
+                    // Atualizar dailyStreak com o valor do backend se for maior
+                    if (response.data.journey.adventure_days > dailyStreak) {
+                        setDailyStreak(response.data.journey.adventure_days);
+                        localStorage.setItem('dailyStreak', response.data.journey.adventure_days.toString());
+                    }
+                }
+            } catch (err) {
+                console.error('Erro ao buscar dados da jornada:', err);
+                // Manter os valores padrão em caso de erro
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchJourneyData();
+
+        const interval = setInterval(fetchJourneyData, 30000);
+
+        return () => clearInterval(interval);
+    }, [navigate, dailyStreak, refreshCounter]);
 
     // Efeito de confete para celebrar conquistas (simulado para demo)
     useEffect(() => {
@@ -217,17 +267,19 @@ const Dashboard = () => {
                 )}
 
                 <section className="progress-summary">
-                    <h2><FaTrophy /> Sua Jornada</h2>
+                    <h2>
+                        <FaTrophy /> Sua Jornada
+                    </h2>
                     <div className="progress-cards">
                         <div className="progress-card">
                             <div className="progress-card-icon">🎯</div>
-                            <div className="progress-card-value">{stats.completed}</div>
+                            <div className="progress-card-value">{journeyStats.challenges_completed}</div>
                             <div className="progress-card-label">Desafios Vencidos</div>
                         </div>
 
                         <div className="progress-card">
                             <div className="progress-card-icon">⭐</div>
-                            <div className="progress-card-value">{stats.score}</div>
+                            <div className="progress-card-value">{journeyStats.magic_points}</div>
                             <div className="progress-card-label">Pontos de Magia</div>
                         </div>
 

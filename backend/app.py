@@ -28,6 +28,9 @@ from database.db_connector import DatabaseConnector
 from dotenv import load_dotenv
 from openai import OpenAI
 
+# Importar o blueprint API
+from routes.api import api_bp
+
 from pathlib import Path
 # Add project root to Python path
 if __name__ == "__main__":
@@ -58,6 +61,9 @@ if not OPENAI_API_KEY:
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Registrar o blueprint da API
+app.register_blueprint(api_bp, url_prefix='/api')
 
 # Configure CORS globalmente
 CORS(app,

@@ -3,6 +3,7 @@ from auth.auth_middleware import token_required
 from database.db_connector import get_user_history, get_user_statistics, get_user_achievements
 # Importando a função de síntese do módulo speech
 from speech.synthesis import synthesize_speech
+import time
 
 api_bp = Blueprint('api', __name__)
 
@@ -67,6 +68,71 @@ def user_achievements(current_user):
         return jsonify({
             'success': False,
             'message': f'Erro ao buscar conquistas: {str(e)}'
+        }), 500
+
+
+@api_bp.route('/user/journey', methods=['GET'])
+@token_required
+def user_journey(user_id):
+    """
+    Endpoint para obter os dados da jornada do usuário para o dashboard.
+    - Total de desafios: número de jogos completados
+    - Pontos de magia: média de pontuação de todos os jogos
+    - Dias de aventura: número de dias de login consecutivos
+    """
+    try:
+        from database.db_connector import DatabaseConnector
+        from datetime import datetime, timedelta
+
+        db = DatabaseConnector()
+
+        # Obter usuário do banco de dados
+        user = db.get_user_by_id(user_id)
+        if not user:
+            return jsonify({
+                'success': False,
+                'message': 'Usuário não encontrado'
+            }), 404
+
+        # 1. Desafios vencidos: considerar tanto as sessões no histórico quanto os jogos marcados como completos
+        # 1.1 Buscar jogos marcados como completos diretamente da coleção de jogos (principal fonte de verdade)
+        completed_games = db.get_completed_games(user_id)
+
+        # Verificar se há jogos completos
+        challenges_completed = len(completed_games)
+
+        # 2. Pontos de magia: média de pontuação
+        # Calcular pontuação apenas a partir dos jogos completos
+        if challenges_completed > 0:
+            total_games_score = sum(game.get('final_score', 0)
+                                    for game in completed_games)
+            magic_points = round(total_games_score / challenges_completed)
+        else:
+            magic_points = 0
+
+        # 3. Dias de aventura: obtido do campo estatísticas ou valor padrão
+        adventure_days = user.get('statistics', {}).get('consecutive_days', 1)
+
+        # Log para debug (incluindo análise de dados)
+        print(
+            f"Usuário {user_id}: {challenges_completed} desafios, {magic_points} pontos de magia, {adventure_days} dias de aventura")
+
+        return jsonify({
+            'success': True,
+            'journey': {
+                'challenges_completed': challenges_completed,
+                'magic_points': magic_points,
+                'adventure_days': adventure_days
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"Erro ao buscar dados da jornada: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar dados da jornada: {str(e)}'
         }), 500
 
 
