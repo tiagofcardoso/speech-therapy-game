@@ -1,0 +1,52 @@
+{
+  "title": "Bichinhos do Som B",
+  "description": "Ajude os bichinhos a encontrar seus amigos pronunciando corretamente as palavras com o som 'b'.",
+  "instructions": [
+    "Escute a palavra que eu dirijo.",
+    "Repita a palavra em voz alta.",
+    "Foquem bem na letra 'b'.",
+    "Clique na imagem que corresponde ao som que você ouviu.",
+    "Vamos nos divertir e fazer muito barulho!"
+  ],
+  "exercises": [
+    {
+      "word": "boi",
+      "tip": "Abra bem a boca para fazer o som do 'b'.",
+      "difficulty": 1,
+      "image_hint": "Imagem de um boi pastando em um campo."
+    },
+    {
+      "word": "bola",
+      "tip": "Pense na forma redonda da bola enquanto diz a palavra.",
+      "difficulty": 1,
+      "image_hint": "Imagem de uma bola colorida."
+    },
+    {
+      "word": "bote",
+      "tip": "Diga devagar, escutando o 'b' no início.",
+      "difficulty": 2,
+      "image_hint": "Imagem de um bote flutuando no rio."
+    },
+    {
+      "word": "bicho",
+      "tip": "Lembre-se de que o 'b' é bem forte no começo.",
+      "difficulty": 2,
+      "image_hint": "Imagem de um inseto pequeno."
+    },
+    {
+      "word": "bela",
+      "tip": "Veja como a boca se move ao dizer 'b'.",
+      "difficulty": 3,
+      "image_hint": "Imagem de uma pessoa bonita sorrindo."
+    }
+  ],
+  "target_skills": [
+    "Pronúncia do som 'b'",
+    "Articulação clara",
+    "Aumento da confiança ao falar"
+  ],
+  "target_sound": "b",
+  "estimated_duration": "5-10 minutos",
+  "theme": "animais",
+  "visual_style": "colorido"
+}

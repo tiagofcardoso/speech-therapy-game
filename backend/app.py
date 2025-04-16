@@ -463,28 +463,84 @@ def start_game(user_id):
 
         print(f"Perfil do usuário: {user_profile}")
 
+        # Inicializar a sessão
+        session_data = {}
+
         # Se um game_id for fornecido, tentar buscar o jogo na base de dados
-        game_data = None
         if game_id:
             try:
                 game_data = db.get_game(game_id)
                 print(
                     f"Jogo encontrado: {game_data.get('title') if game_data else 'Não encontrado'}")
+
+                if game_data:
+                    # Usar o jogo existente para criar a sessão em vez de gerar um novo
+                    print("Utilizando jogo existente para esta sessão")
+
+                    # Preparar exercícios a partir do conteúdo do jogo
+                    exercises = []
+
+                    # Verificar diferentes possíveis localizações para os exercícios
+                    content = game_data.get("content", {})
+                    if isinstance(content, dict) and "exercises" in content:
+                        raw_exercises = content.get("exercises", [])
+                    elif isinstance(content, dict) and "content" in content:
+                        raw_exercises = content.get("content", [])
+                    elif "exercises" in game_data:
+                        raw_exercises = game_data.get("exercises", [])
+                    elif "content" in game_data and isinstance(game_data.get("content"), list):
+                        raw_exercises = game_data.get("content", [])
+                    elif isinstance(content, list):
+                        raw_exercises = content
+                    else:
+                        raw_exercises = []
+
+                    # Transformar os exercícios para o formato esperado pela sessão
+                    for idx, exercise in enumerate(raw_exercises):
+                        if not isinstance(exercise, dict):
+                            continue
+
+                        transformed_exercise = {
+                            "word": exercise.get("word", exercise.get("text", exercise.get("answer", ""))),
+                            "prompt": exercise.get("prompt", exercise.get("tip", "Pronuncie esta palavra")),
+                            "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
+                            "visual_cue": exercise.get("visual_cue", exercise.get("word", ""))
+                        }
+                        exercises.append(transformed_exercise)
+
+                    # Criar sessão a partir do jogo existente
+                    session_data = {
+                        "session_id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "game_id": game_id,
+                        "game_title": game_data.get("title", title),
+                        "difficulty": game_data.get("difficulty", difficulty),
+                        "game_type": game_data.get("game_type", game_type),
+                        "exercises": exercises,
+                        "instructions": game_data.get("instructions", ["Bem-vindo ao jogo de pronúncia!"]),
+                        "current_index": 0,
+                        "responses": [],
+                        "completed": False,
+                        "start_time": datetime.datetime.now().isoformat(),
+                        "end_time": None
+                    }
             except Exception as e:
                 print(f"Erro ao buscar jogo {game_id}: {str(e)}")
                 # Continuar mesmo se o jogo não for encontrado
 
-        # Criar uma nova sessão de jogo usando MCP
-        session_data = mcp_coordinator.create_game_session(
-            user_id, user_profile)
+        # Se a sessão não foi criada a partir de um jogo existente, criar uma nova com o MCP
+        if not session_data:
+            print("Criando nova sessão de jogo via MCP coordinator")
+            session_data = mcp_coordinator.create_game_session(
+                user_id, user_profile)
 
-        # Associar a sessão com o jogo que está sendo jogado
-        if game_id:
-            session_data["game_id"] = game_id
-            session_data["game_title"] = title
-            session_data["game_type"] = game_type
+            # Associar a sessão com o jogo que está sendo jogado se um ID foi fornecido
+            if game_id:
+                session_data["game_id"] = game_id
+                session_data["game_title"] = title
+                session_data["game_type"] = game_type
 
-        # Adicionar ID de sessão para rastreamento
+        # Adicionar ID de sessão para rastreamento se ainda não existir
         if "session_id" not in session_data:
             session_data["session_id"] = str(uuid.uuid4())
 
@@ -776,21 +832,49 @@ def evaluate_pronunciation(user_id):
 
         print(
             f"Iniciando avaliação de pronúncia para: '{recognized_text}' (esperado: '{expected_word}')")
-        evaluation = evaluator.evaluate_pronunciation(
-            spoken_text=recognized_text,
-            expected_word=expected_word,
-            hint=f"Foca na pronúncia correta do som em '{expected_word}'"
-        )
+        try:
+            evaluation = evaluator.evaluate_speech(
+                spoken_text=recognized_text,
+                expected_text=expected_word,
+                difficulty="medium"
+            )
+        except Exception as eval_error:
+            print(f"Erro na avaliação de pronúncia: {str(eval_error)}")
+            traceback.print_exc()
+            # Fornecer uma avaliação padrão em caso de erro
+            evaluation = {
+                "accuracy": 0.5,
+                "score": 50,
+                "details": {
+                    "phonetic_analysis": "Não foi possível completar a análise fonética detalhada."
+                },
+                "strengths": [],
+                "improvement_areas": ["Pronúncia geral"]
+            }
 
         # 5. Gerar feedback detalhado
-        accuracy_score = evaluation.get("accuracy_score", 5)
+        accuracy_score = int(evaluation.get("accuracy", 0.5) * 10)
         is_correct = accuracy_score >= 7  # Considerar correto se score >= 7
-        matched_sounds = evaluation.get("matched_sounds", [])
-        challenging_sounds = evaluation.get("challenging_sounds", [])
-        detailed_feedback = evaluation.get("detailed_feedback", "")
 
-        # 6. Gerar feedback em áudio
-        audio_feedback = synthesize_speech(detailed_feedback)
+        # Extrair dados da avaliação com tratamento para campos ausentes
+        matched_sounds = evaluation.get("strengths", [])
+        challenging_sounds = evaluation.get("improvement_areas", [])
+
+        # Obter feedback detalhado, com fallback para campo details.phonetic_analysis
+        if "details" in evaluation and "phonetic_analysis" in evaluation["details"]:
+            detailed_feedback = evaluation["details"]["phonetic_analysis"]
+        else:
+            detailed_feedback = "Análise da pronúncia: " + ("Boa pronúncia!" if is_correct
+                                                            else "Alguns sons precisam ser melhorados.")
+
+        # 6. Gerar feedback em áudio apenas se houver texto para sintetizar
+        audio_feedback = None
+        if detailed_feedback:
+            try:
+                audio_feedback = synthesize_speech(detailed_feedback)
+            except Exception as audio_error:
+                print(
+                    f"Erro ao sintetizar feedback em áudio: {str(audio_error)}")
 
         # 7. Limpar arquivos temporários
         try:
@@ -800,6 +884,15 @@ def evaluate_pronunciation(user_id):
         except Exception as e:
             print(f"Erro ao remover arquivos temporários: {e}")
 
+        # Garantir que temos feedback de áudio, mesmo que seja um fallback
+        if not audio_feedback:
+            fallback_text = "Obrigado pela tua pronúncia!"
+            if is_correct:
+                fallback_text += " Muito bem!"
+            else:
+                fallback_text += " Continua a praticar!"
+            audio_feedback = synthesize_speech(fallback_text)
+
         return jsonify({
             "success": True,
             "isCorrect": is_correct,
@@ -807,14 +900,24 @@ def evaluate_pronunciation(user_id):
             "recognized_text": recognized_text,
             "matched_sounds": matched_sounds,
             "challenging_sounds": challenging_sounds,
-            "feedback": detailed_feedback,
+            "feedback": detailed_feedback or "Análise de pronúncia concluída.",
             "audio_feedback": audio_feedback
         })
 
     except Exception as e:
         print(f"Erro na avaliação de pronúncia: {str(e)}")
         traceback.print_exc()
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"}), 500
+
+        # Fornecer resposta de erro com feedback de áudio
+        error_message = "Ocorreu um erro durante a avaliação. Por favor, tenta novamente."
+        error_audio = synthesize_speech(error_message)
+
+        return jsonify({
+            "success": False,
+            "message": f"Erro: {str(e)}",
+            "feedback": error_message,
+            "audio_feedback": error_audio
+        }), 500
 
 
 @app.route('/api/gigi/generate-game', methods=['OPTIONS'])

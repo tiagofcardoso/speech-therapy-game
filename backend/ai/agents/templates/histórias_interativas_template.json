@@ -1,0 +1,54 @@
+{
+  "title": "A Magia do Som 'M'",
+  "description": "Neste jogo, as crianças ajudam os amigos a resolverem situações engraçadas enquanto falam palavras com o som 'm'. O objetivo é praticar a pronúncia do som 'm' de uma forma divertida e interativa.",
+  "instructions": [
+    "Escute a história.",
+    "Repita a frase ao personagem.",
+    "Ajude o amigo dizendo a palavra correta.",
+    "Tente pronunciar o som 'm' claramente.",
+    "Divirta-se com os amigos da história!"
+  ],
+  "exercises": [
+    {
+      "scenario": "O gato e a maçã",
+      "target_phrase": "A maçã é minha.",
+      "context": "O gato quer comer uma maçã, mas ele precisa de ajuda para pegá-la.",
+      "character": "O gato"
+    },
+    {
+      "scenario": "A mamãe e o menino",
+      "target_phrase": "Mamãe, eu quero brincar.",
+      "context": "O menino chama a mamãe para brincar no parque.",
+      "character": "O menino"
+    },
+    {
+      "scenario": "O cachorro e a bola",
+      "target_phrase": "A bola é do Max.",
+      "context": "O cachorro Max quer que seu amigo saiba que a bola é dele.",
+      "character": "Max, o cachorro"
+    },
+    {
+      "scenario": "O mágico e o coalho",
+      "target_phrase": "O mágico tem um coalho.",
+      "context": "Um mágico mostra seu novo amigo, um coalho falante, para a plateia.",
+      "character": "O mágico"
+    },
+    {
+      "scenario": "A menina e a manta",
+      "target_phrase": "Minha manta é quentinha.",
+      "context": "A menina fala sobre sua manta favorita enquanto se prepara para dormir.",
+      "character": "A menina"
+    }
+  ],
+  "target_skills": [
+    "Pronúncia do som 'm'",
+    "Vocabulario básico",
+    "Compreensão oral",
+    "Expressão verbal",
+    "Interação social"
+  ],
+  "target_sound": "m",
+  "estimated_duration": "10-15 minutos",
+  "theme": "animais",
+  "visual_style": "colorido"
+}

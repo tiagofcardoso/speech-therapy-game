@@ -19,9 +19,10 @@ if __name__ == "__main__":
 from ai.agents.game_designer_agent import GameDesignerAgent
 from ai.agents.progression_manager_agent import ProgressionManagerAgent
 from ai.agents.tutor_agent import TutorAgent
+from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
 
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname%s - %(message)s')
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
 class MCPCoordinator:
@@ -40,11 +41,13 @@ class MCPCoordinator:
         self.game_designer = GameDesignerAgent()
         self.progression_manager = ProgressionManagerAgent()
         self.tutor = TutorAgent(self.game_designer)
+        self.speech_evaluator = SpeechEvaluatorAgent()
 
         self.agents = {
             "game_designer": self.game_designer,
             "progression_manager": self.progression_manager,
-            "tutor": self.tutor
+            "tutor": self.tutor,
+            "speech_evaluator": self.speech_evaluator
         }
 
         self.logger.info("MCPCoordinator initialized successfully")
@@ -74,7 +77,7 @@ class MCPCoordinator:
             difficulty = self.agents["progression_manager"].determine_difficulty(
                 user_profile)
             game = self.agents["game_designer"].create_game(
-                user_id, difficulty)
+                user_id, difficulty, db_connector=self.db_connector)  # Passando o db_connector para uso no histórico
             instructions = self.agents["tutor"].create_instructions(
                 user_profile, difficulty)
 
@@ -115,6 +118,7 @@ class MCPCoordinator:
                 # Sintetizar áudio para o feedback, se necessário
                 if self.tutor.voice_enabled:
                     try:
+                        from backend.speech.synthesis import synthesize_speech
                         no_recognition_feedback["audio"] = synthesize_speech(
                             no_recognition_feedback["praise"])
                     except Exception as e:
@@ -147,22 +151,40 @@ class MCPCoordinator:
                     }
                 }
 
+            # Obter o exercício atual
+            current_exercise = exercises[current_index]
+            expected_text = current_exercise.get("target_text", "")
+
+            # Usar o SpeechEvaluatorAgent para avaliar a pronúncia
+            speech_evaluation = self.agents["speech_evaluator"].evaluate_speech(
+                recognized_text, expected_text, session.get(
+                    "difficulty", "medium")
+            )
+
+            # Obter feedback do TutorAgent baseado na avaliação
             feedback = self.agents["tutor"].provide_feedback(
-                user_id, recognized_text)
-            is_correct = feedback["correct"]
+                user_id, recognized_text, speech_evaluation=speech_evaluation
+            )
+
+            # Threshold de precisão
+            is_correct = speech_evaluation["accuracy"] >= 0.7
+            score = speech_evaluation["score"]
 
             if is_correct:
                 session["current_index"] += 1
                 session["responses"].append({
                     "exercise_index": current_index,
                     "recognized_text": recognized_text,
+                    "expected_text": expected_text,
                     "is_correct": is_correct,
-                    "score": feedback["score"]
+                    "accuracy": speech_evaluation["accuracy"],
+                    "score": score,
+                    "details": speech_evaluation.get("details", {})
                 })
 
                 # Atualizar o progresso no GameDesigner, passando o db_connector
                 self.game_designer.update_progress(
-                    user_id, feedback["score"], self.db_connector)
+                    user_id, score, self.db_connector)
 
             # Salvar a sessão atualizada no banco de dados
             if self.db_connector:
@@ -180,18 +202,28 @@ class MCPCoordinator:
                     **exercises[next_index], "index": next_index, "total": len(exercises)}
 
             self.sessions[user_id] = session
+
+            # Gerar feedback personalizado baseado na avaliação de fala
+            correction_tip = None
+            if not is_correct and "improvement_areas" in speech_evaluation:
+                correction_tip = speech_evaluation["improvement_areas"][0] if speech_evaluation[
+                    "improvement_areas"] else "Tenta pronunciar mais claramente"
+
             self.logger.info(
-                f"Processed response for user {user_id}: correct={is_correct}")
+                f"Processed response for user {user_id}: correct={is_correct}, accuracy={speech_evaluation['accuracy']:.2f}")
+
             return {
                 "session_complete": session_complete,
                 "feedback": {
                     "praise": feedback["message"],
-                    "correction": None if is_correct else f"Tenta dizer a palavra novamente",
-                    "tip": "Fala devagar" if not is_correct else "Excelente pronúncia!",
-                    "encouragement": "Continua assim!"
+                    "correction": None if is_correct else f"Tenta dizer '{expected_text}' novamente",
+                    "tip": correction_tip if not is_correct else "Excelente pronúncia!",
+                    "encouragement": feedback.get("encouragement", "Continua assim!"),
+                    "accuracy": speech_evaluation["accuracy"]
                 },
                 "current_exercise": next_exercise,
-                "repeat_exercise": not is_correct
+                "repeat_exercise": not is_correct,
+                "pronunciation_details": speech_evaluation.get("details", {})
             }
         except Exception as e:
             self.logger.error(f"Error processing response: {str(e)}")

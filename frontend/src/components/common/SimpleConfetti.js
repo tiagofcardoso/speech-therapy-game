@@ -6,10 +6,15 @@ const SimpleConfetti = ({ active = true, duration = 5000, particleCount = 100 })
     const particles = useRef([]);
     const animationFrameId = useRef(null);
     const startTimeRef = useRef(null);
+    const isActiveRef = useRef(active);
 
     // Create particles with random properties
     const createParticles = (canvas) => {
+        if (!canvas) return;
+
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
         const width = canvas.width;
         const height = canvas.height;
 
@@ -45,6 +50,19 @@ const SimpleConfetti = ({ active = true, duration = 5000, particleCount = 100 })
 
     // Animation loop
     const animate = (timestamp) => {
+        // Verificar se o componente ainda está ativo
+        if (!isActiveRef.current) {
+            cancelAnimationFrame(animationFrameId.current);
+            return;
+        }
+
+        const canvas = canvasRef.current;
+        // Verificar se o canvas ainda existe
+        if (!canvas) {
+            cancelAnimationFrame(animationFrameId.current);
+            return;
+        }
+
         if (!startTimeRef.current) startTimeRef.current = timestamp;
         const elapsedTime = timestamp - startTimeRef.current;
 
@@ -53,8 +71,13 @@ const SimpleConfetti = ({ active = true, duration = 5000, particleCount = 100 })
             return;
         }
 
-        const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
+        // Verificar se conseguimos obter o contexto do canvas
+        if (!ctx) {
+            cancelAnimationFrame(animationFrameId.current);
+            return;
+        }
+
         const width = canvas.width;
         const height = canvas.height;
 
@@ -87,23 +110,40 @@ const SimpleConfetti = ({ active = true, duration = 5000, particleCount = 100 })
     };
 
     useEffect(() => {
-        if (!active) return;
+        // Atualizar a ref quando a prop active mudar
+        isActiveRef.current = active;
+
+        if (!active) {
+            // Limpar animações se o componente estiver inativo
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+            }
+            return;
+        }
 
         const canvas = canvasRef.current;
+        // Verificar se o canvas existe antes de prosseguir
+        if (!canvas) return;
+
         const resizeCanvas = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            if (canvas) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
         };
 
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
+        // Iniciar animação apenas se o canvas estiver disponível
         createParticles(canvas);
         startTimeRef.current = null;
         animationFrameId.current = requestAnimationFrame(animate);
 
         return () => {
-            cancelAnimationFrame(animationFrameId.current);
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+            }
             window.removeEventListener('resize', resizeCanvas);
         };
     }, [active, particleCount, duration]);
