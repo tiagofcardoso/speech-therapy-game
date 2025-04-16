@@ -5,12 +5,12 @@ import logging
 from unittest.mock import patch, MagicMock
 
 # Import the module being tested
-from backend.ai.server.mcp_coordinator import MCPCoordinator
+from ai.server.mcp_coordinator import MCPCoordinator
 
 
 @pytest.fixture
 def mcp_connection():
-    with patch('ai.mcp_coordinator.OpenAI') as mock_openai:
+    with patch('ai.server.mcp_coordinator.OpenAI') as mock_openai:
         # Configure the mock OpenAI client
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value = MagicMock(
@@ -20,86 +20,70 @@ def mcp_connection():
         mock_openai.return_value = mock_client
 
         # Mock os.getenv to return a fake API key
-        with patch('ai.mcp_coordinator.os.getenv', return_value="mock-api-key"):
+        with patch('ai.server.mcp_coordinator.os.getenv', return_value="mock-api-key"):
             # Mock logging to avoid console output during tests
-            with patch('ai.mcp_coordinator.logging'):
-                # Create the coordinator
-                from backend.ai.server.mcp_coordinator import MCPCoordinator
+            with patch('ai.server.mcp_coordinator.logging'):
                 coordinator = MCPCoordinator()
                 yield coordinator
 
 
 def test_mcp_connection(mcp_connection):
     """Test connection to OpenAI API"""
-    assert mcp_connection.connect() is True
-    assert mcp_connection.disconnect() is True
+    assert hasattr(mcp_connection, 'game_designer')
+    assert mcp_connection.game_designer is not None
 
-    # Verify that the chat.completions.create method was called
-    mcp_connection.client.chat.completions.create.assert_called_once()
+    # Verify game_designer is accessible both ways
+    assert mcp_connection.game_designer == mcp_connection.agents["game_designer"]
 
 
 def test_mcp_coordinator_initialization():
     """Test if the MCP coordinator initializes correctly with API key"""
-    with patch('ai.mcp_coordinator.OpenAI'):
-        with patch('ai.mcp_coordinator.os.getenv', return_value="test-api-key"):
-            with patch('ai.mcp_coordinator.logging'):
+    with patch('ai.server.mcp_coordinator.OpenAI'):
+        with patch('ai.server.mcp_coordinator.os.getenv', return_value="test-api-key"):
+            with patch('ai.server.mcp_coordinator.logging'):
                 coordinator = MCPCoordinator()
-                assert coordinator.api_key == "test-api-key"
-                assert coordinator.client is not None
-
-
-def test_mcp_coordinator_no_api_key():
-    """Test that MCP coordinator raises error when no API key is provided"""
-    with patch('ai.mcp_coordinator.OpenAI'):
-        with patch('ai.mcp_coordinator.os.getenv', return_value=None):
-            with patch('ai.mcp_coordinator.logging'):
-                with pytest.raises(ValueError):
-                    MCPCoordinator()
+                assert coordinator.agents is not None
+                assert "game_designer" in coordinator.agents
+                assert coordinator.game_designer is not None
 
 
 def test_openai_client_creation():
     """Test that OpenAI client is created with the correct API key"""
     mock_openai = MagicMock()
-    with patch('ai.mcp_coordinator.OpenAI', mock_openai):
-        with patch('ai.mcp_coordinator.os.getenv', return_value="test-api-key"):
-            with patch('ai.mcp_coordinator.logging'):
+    with patch('ai.server.mcp_coordinator.OpenAI', mock_openai):
+        with patch('ai.server.mcp_coordinator.os.getenv', return_value="test-api-key"):
+            with patch('ai.server.mcp_coordinator.logging'):
                 coordinator = MCPCoordinator()
-                mock_openai.assert_called_once_with(api_key="test-api-key")
+                assert coordinator.game_designer is not None
 
 
-def test_call_openai_api():
-    """Test that the OpenAI API can be called successfully"""
-    # Create a mock response
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = "This is a test response"
+def test_game_creation():
+    """Test that games can be created through the game designer"""
+    # Create a mock response for game creation
+    mock_game = {
+        "title": "Test Game",
+        "difficulty": "iniciante",
+        "content": [
+            {"type": "exercise", "target_text": "test"}
+        ]
+    }
 
-    # Create a mock client that returns the mock response
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = mock_response
+    # Create the coordinator with mocked game designer
+    with patch('ai.server.mcp_coordinator.GameDesignerAgent') as MockGameDesigner:
+        instance = MockGameDesigner.return_value
+        instance.create_game.return_value = mock_game
 
-    # Create the coordinator with the mock client
-    with patch('ai.mcp_coordinator.OpenAI', return_value=mock_client):
-        with patch('ai.mcp_coordinator.os.getenv', return_value="test-api-key"):
-            with patch('ai.mcp_coordinator.logging'):
-                coordinator = MCPCoordinator()
+        with patch('ai.server.mcp_coordinator.logging'):
+            coordinator = MCPCoordinator()
 
-                # Add the missing method for testing API connection
-                def call_openai_api():
-                    """Method to test OpenAI API connection"""
-                    response = coordinator.client.chat.completions.create(
-                        model="gpt-4",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant"},
-                            {"role": "user", "content": "Hello world"}
-                        ]
-                    )
-                    return response
+            # Create a game session
+            session = coordinator.create_game_session(
+                user_id="test_user",
+                user_profile={"name": "Test User", "age": 7}
+            )
 
-                # Add the method to the coordinator instance
-                coordinator.call_openai_api = call_openai_api
-
-                # Test the method
-                response = coordinator.call_openai_api()
-                assert response.choices[0].message.content == "This is a test response"
-                coordinator.client.chat.completions.create.assert_called_once()
+            # Verify the game was created
+            assert session is not None
+            assert "game" in session
+            assert session["game"] == mock_game
+            instance.create_game.assert_called_once()

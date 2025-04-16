@@ -24,6 +24,11 @@ class GameDesignerAgent:
         self.current_games = {}
         self.user_preferences = {}  # Armazenar preferências de usuário
         self.game_templates = self._load_game_templates()
+        self.tool_registry = {
+            'generate_game': self._generate_content,
+            'update_progress': self.update_progress,
+            'get_current_exercise': self.get_current_exercise
+        }
         self.logger.info("GameDesignerAgent initialized")
 
     def _load_game_templates(self) -> Dict[str, Any]:
@@ -60,11 +65,16 @@ class GameDesignerAgent:
 
     def create_game(self, user_id: str, difficulty: Optional[str] = None, game_type: Optional[str] = None,
                     age_group: Optional[str] = "crianças", db_connector=None) -> Dict[str, Any]:
-        self.logger.info(
-            f"GameDesignerAgent.create_game called by MCP coordinator for user {user_id}")
+        """
+        Cria um novo jogo para o usuário.
+        """
+        # Se não temos estatísticas, usar configurações padrão
+        user_stats = {"accuracy": 0, "exercises_completed": 0}
 
-        # Considerar preferências do usuário, se disponíveis
-        user_prefs = self.user_preferences.get(user_id, {})
+        if db_connector:
+            user = db_connector.get_user(user_id)
+            if user and "statistics" in user:
+                user_stats = user["statistics"]
 
         # Se o parâmetro de dificuldade for "aleatório" ou None, escolha baseado no perfil
         if difficulty is None or difficulty == "aleatório":
@@ -84,8 +94,8 @@ class GameDesignerAgent:
             f"Creating game for user {user_id}: difficulty={difficulty}, type={game_type}, age_group={age_group}")
 
         # Considerar pontos fracos do usuário ao gerar conteúdo
+        user_prefs = self.user_preferences.get(user_id, {})
         weak_sounds = user_prefs.get("weak_sounds", [])
-        strong_sounds = user_prefs.get("strong_sounds", [])
 
         # Direcionar o foco para sons fracos se disponível
         target_sound = None

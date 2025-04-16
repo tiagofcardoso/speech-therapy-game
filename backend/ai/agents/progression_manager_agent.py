@@ -75,10 +75,6 @@ class ProgressionManagerAgent:
     def update_user_progress(self, user_id: str, session_data: Dict[str, Any]) -> None:
         """
         Atualiza o progresso do usuário com base nos dados da sessão
-
-        Args:
-            user_id: ID do usuário
-            session_data: Dados da sessão completada
         """
         if user_id not in self.user_history:
             self.user_history[user_id] = []
@@ -89,11 +85,29 @@ class ProgressionManagerAgent:
             "score": session_data.get("final_score", 0),
             "difficulty": session_data.get("difficulty", "iniciante"),
             "exercises_completed": len(session_data.get("responses", [])),
-            "game_type": session_data.get("game_type", "exercícios de pronúncia")
+            "game_type": session_data.get("game_type", "exercícios de pronúncia"),
+            "acerto": session_data.get("accuracy", 0) > 0.7,
+            "som_alvo": session_data.get("target_sound", "")
         }
 
         self.user_history[user_id].append(session_summary)
-        self.logger.info(f"Updated progress for user {user_id}")
+
+        # Analisar desempenho após cada sessão
+        analise = self.tool_registry.execute("analisar_desempenho_usuario",
+                                             historico_exercicios=self.user_history[user_id])
+
+        # Atualizar recomendações com base na análise
+        if analise.get("areas_melhoria"):
+            self.logger.info(
+                f"Áreas de melhoria identificadas para {user_id}: {analise['areas_melhoria']}")
+
+        # Atualizar pontos fortes no perfil do usuário
+        if analise.get("pontos_fortes"):
+            self.logger.info(
+                f"Pontos fortes identificados para {user_id}: {analise['pontos_fortes']}")
+
+        self.logger.info(
+            f"Updated progress for user {user_id} with performance analysis")
 
     def get_user_stats(self, user_id: str) -> Dict[str, Any]:
         """

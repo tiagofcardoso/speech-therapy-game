@@ -1,10 +1,11 @@
-from typing import Dict, Any, Optional, List
-import json
+from typing import Dict, List, Any, Optional
 import logging
 import os
 import random
 import datetime
+import json
 from openai import OpenAI
+from ai.server.openai_client import create_openai_client
 from speech.synthesis import synthesize_speech
 
 # Configuração adequada do logging
@@ -20,6 +21,8 @@ class TutorAgent:
         self.user_sessions = {}
         self.voice_enabled = os.environ.get(
             "ENABLE_TUTOR_VOICE", "true").lower() == "true"
+        self.search_api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
+        self.search_engine_id = os.environ.get("GOOGLE_SEARCH_ENGINE_ID")
 
         # Carregar personalidades do tutor
         self.tutor_personas = {
@@ -67,8 +70,69 @@ class TutorAgent:
         # Histórico de interações para rastreamento de longo prazo
         self.interaction_history = {}
 
+        # Registrar ferramentas do tutor
+        self.tool_registry = {
+            'search_internet': self._search_internet,
+            'create_instructions': self.create_instructions,
+            'provide_feedback': self.provide_feedback,
+            'evaluate_response': self.evaluate_response
+        }
+
         self.logger.info(
             f"TutorAgent inicializado com voz {'ativada' if self.voice_enabled else 'desativada'}")
+
+    def _search_internet(self, query: str, max_results: int = 3) -> Dict[str, Any]:
+        """
+        Realiza uma pesquisa na internet usando a API do Google Search
+
+        Args:
+            query: Texto a ser pesquisado
+            max_results: Número máximo de resultados (padrão: 3)
+
+        Returns:
+            Dicionário com resultados da pesquisa
+        """
+        try:
+            if not self.search_api_key or not self.search_engine_id:
+                self.logger.warning(
+                    "Chaves da API de pesquisa não configuradas")
+                return {"error": "API de pesquisa não configurada", "results": []}
+
+            import requests
+            url = "https://www.googleapis.com/customsearch/v1"
+            params = {
+                'key': self.search_api_key,
+                'cx': self.search_engine_id,
+                'q': query,
+                'num': max_results
+            }
+
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                self.logger.error(f"Erro na pesquisa: {response.status_code}")
+                return {"error": f"Erro na API: {response.status_code}", "results": []}
+
+            data = response.json()
+            results = []
+
+            if 'items' in data:
+                for item in data['items']:
+                    results.append({
+                        'title': item.get('title', ''),
+                        'link': item.get('link', ''),
+                        'snippet': item.get('snippet', '')
+                    })
+
+            self.logger.info(
+                f"Pesquisa realizada com sucesso: {len(results)} resultados")
+            return {
+                "success": True,
+                "results": results
+            }
+
+        except Exception as e:
+            self.logger.error(f"Erro ao realizar pesquisa: {str(e)}")
+            return {"error": str(e), "results": []}
 
     def create_instructions(self, user_profile: Dict[str, Any], difficulty: str) -> Dict[str, Any]:
         """Cria instruções personalizadas para o usuário com base no perfil"""
@@ -173,66 +237,35 @@ class TutorAgent:
                             "Alguns segmentos de áudio falharam na geração")
                 except Exception as e:
                     self.logger.error(
-                        f"Falha ao gerar voz para instruções: {str(e)}")
-
-            # Armazenar contexto da sessão para uso futuro
-            self._record_session_start(user_id, difficulty)
+                        f"Erro ao gerar áudio para instruções: {str(e)}")
 
             return instructions
 
         except Exception as e:
             self.logger.error(f"Erro ao criar instruções: {str(e)}")
-            default_instructions = {
-                "greeting": f"Olá, {name}! {persona['emoji']}",
-                "explanation": "Vamos praticar palavras divertidas hoje!",
-                "encouragement": random.choice(persona["encouragements"]),
-                "tips": ["Respira fundo", "Fala devagar", "Diverte-te!"]
+            return {
+                "error": str(e),
+                "greeting": f"Olá, {name}!",
+                "explanation": "Desculpa, estou com algumas dificuldades técnicas.",
+                "encouragement": "Vamos tentar mesmo assim!"
             }
-
-            if self.voice_enabled:
-                try:
-                    voice_settings = self.voice_settings.get(persona["voice"],
-                                                             {"voice_id": "Ines", "engine": "neural"})
-
-                    default_instructions["audio"] = {
-                        "greeting": synthesize_speech(default_instructions["greeting"], voice_settings),
-                        "explanation": synthesize_speech(default_instructions["explanation"], voice_settings),
-                        "encouragement": synthesize_speech(default_instructions["encouragement"], voice_settings)
-                    }
-                except Exception as e:
-                    self.logger.error(
-                        f"Falha ao gerar voz para instruções padrão: {str(e)}")
-
-            return default_instructions
 
     def provide_feedback(self, user_id: str, response: str, speech_evaluation: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Fornece feedback personalizado com base na resposta do usuário e na avaliação de fala
-
-        Args:
-            user_id: ID do usuário
-            response: Texto reconhecido do usuário
-            speech_evaluation: Avaliação detalhada da fala pelo SpeechEvaluatorAgent (opcional)
-
-        Returns:
-            Feedback com score, mensagem, indicação de acerto, etc.
+        Fornece feedback personalizado com base na resposta do usuário e avaliação de fala
         """
-        self.logger.info(
-            f"TutorAgent.provide_feedback chamado para usuário {user_id}")
-
-        # Verificar se há jogo ativo
-        current_exercise = self.game_designer.get_current_exercise(user_id)
-        if not current_exercise:
-            self.logger.warning(f"Nenhum jogo ativo para usuário {user_id}")
-            error_message = "Nenhum jogo ativo encontrado para este utilizador"
+        if user_id not in self.game_designer.current_games:
+            self.logger.error(f"Nenhum jogo ativo para usuário {user_id}")
+            error_message = "Por favor, inicie um novo jogo para receber feedback."
             return {
-                "error": error_message,
+                "score": 0,
                 "message": error_message,
                 "audio": synthesize_speech(error_message) if self.voice_enabled else None
             }
 
         # Obter dados do jogo atual
         game_type = self.game_designer.current_games[user_id]["game_type"]
+        current_exercise = self.game_designer.get_current_exercise(user_id)
         expected = self._get_expected_word(current_exercise, game_type)
 
         # Usar avaliação do SpeechEvaluatorAgent, se disponível
@@ -289,6 +322,7 @@ class TutorAgent:
             try:
                 voice_settings = self.voice_settings.get(persona["voice"],
                                                          {"voice_id": "Ines", "engine": "neural"})
+                from speech.synthesis import synthesize_speech
                 feedback["audio"] = synthesize_speech(
                     feedback_text, voice_settings)
                 feedback["audio_encouragement"] = synthesize_speech(
@@ -298,210 +332,49 @@ class TutorAgent:
 
         return feedback
 
-    def _get_expected_word(self, exercise: Dict[str, Any], game_type: str) -> str:
-        """Extrai a palavra ou frase esperada com base no tipo de jogo e exercício"""
-        if game_type == "palavras cruzadas":
-            return exercise.get("word", "sol")
-        elif game_type == "adivinhações":
-            return exercise.get("answer", "sol")
-        elif game_type == "rimas":
-            return exercise.get("starter", "sol")
-        elif game_type == "exercícios de pronúncia":
-            return exercise.get("word", "sol")
-        elif game_type == "desafios de pronúncia":
-            return exercise.get("sentence", "sol")
-        elif game_type == "histórias interativas":
-            return exercise.get("target_phrase", "sol")
-        elif game_type == "conjunto de imagens":
-            return exercise.get("target_word", "sol")
-        elif game_type == "frases contextuais":
-            return exercise.get("phrase", "sol")
-        return "sol"  # Padrão para outros tipos
-
-    def _evaluate_pronunciation(self, actual: str, expected: str) -> Dict[str, Any]:
-        """Avalia a pronúncia comparando o texto falado com o esperado"""
-        try:
-            # Tentar com gpt-4o-mini que suporta formato de resposta JSON
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "És um assistente de terapia da fala especializado em avaliação de pronúncia em português."},
-                        {"role": "user", "content": (
-                            f"Texto esperado: '{expected}'. Texto reconhecido do utilizador: '{actual}'. "
-                            "Retorna um JSON com 'score' (1-10), 'explanation' (explicação detalhada), 'strengths' (lista de pontos fortes) e 'areas_to_improve' (lista de áreas a melhorar)."
-                        )}
-                    ],
-                    response_format={"type": "json_object"},
-                    max_tokens=200
-                )
-                evaluation = json.loads(response.choices[0].message.content)
-            except Exception as e:
-                self.logger.error(f"Erro com gpt-4o-mini: {str(e)}")
-                # Fallback para gpt-4o-mini sem response_format
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "És um assistente de terapia da fala especializado em avaliação de pronúncia em português."},
-                        {"role": "user", "content": (
-                            f"Texto esperado: '{expected}'. Texto reconhecido do utilizador: '{actual}'. "
-                            "Retorne um JSON com 'score' (1-10), 'explanation' (explicação detalhada). IMPORTANTE: responda somente o objeto JSON."
-                        )}
-                    ],
-                    max_tokens=200
-                )
-                try:
-                    evaluation = json.loads(
-                        response.choices[0].message.content)
-                except json.JSONDecodeError:
-                    self.logger.warning("Falha ao analisar resposta JSON")
-                    return {"score": 5, "explanation": "Avaliação padrão devido a erro no processamento"}
-
-            self.logger.info(
-                f"Avaliação de pronúncia para '{expected}': {evaluation}")
-            return evaluation
-        except Exception as e:
-            self.logger.error(f"Erro ao avaliar pronúncia: {str(e)}")
-            return {"score": 5, "explanation": "Não foi possível avaliar a pronúncia"}
-
-    def _generate_personalized_feedback(self, score: int, explanation: str, expected: str,
-                                        actual: str, user_id: str, persona: Dict,
-                                        strengths: List = None, areas_to_improve: List = None) -> str:
+    def evaluate_response(self, user_id: str, response: str, expected: str, exercise_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Gera feedback personalizado com base nos resultados da avaliação e na persona do tutor
+        Avalia a resposta do usuário e fornece feedback personalizado
         """
-        try:
-            # Obter histórico de tentativas recentes para este usuário (se disponível)
-            recent_attempts = []
-            if user_id in self.user_sessions:
-                recent_attempts = self.user_sessions[user_id].get(
-                    "recent_attempts", [])
+        # Obter avaliação detalhada
+        evaluation = self._evaluate_pronunciation(response, expected)
+        score = evaluation.get("score", 5)
+        explanation = evaluation.get("explanation", "Avaliação padrão")
 
-            # Determinar se o usuário tem melhorado, piorado ou mantido constante
-            trend = "constante"
-            if len(recent_attempts) >= 3:
-                recent_scores = [a.get("score", 0)
-                                 for a in recent_attempts[-3:]]
-                if all(recent_scores[i] < recent_scores[i+1] for i in range(len(recent_scores)-1)):
-                    trend = "melhorando"
-                elif all(recent_scores[i] > recent_scores[i+1] for i in range(len(recent_scores)-1)):
-                    trend = "piorando"
+        # Selecionar persona apropriada
+        persona = self._select_persona_for_user(user_id)
 
-            # Contexto para personalização do feedback
-            consistency = "primeira tentativa"
-            if len(recent_attempts) > 0:
-                consistency = "inconsistente" if len(
-                    set(a.get("score", 0) for a in recent_attempts[-3:])) > 1 else "consistente"
+        # Gerar feedback personalizado
+        feedback = self._generate_personalized_feedback(
+            score, explanation, expected, response, user_id, persona)
 
-            # Áreas a melhorar e pontos fortes
-            strengths_text = ", ".join(strengths) if strengths else ""
-            areas_to_improve_text = ", ".join(
-                areas_to_improve) if areas_to_improve else ""
+        # Atualizar progresso do usuário
+        self._update_user_progress(user_id, score, response, expected)
 
-            # Construir o prompt para feedback
-            prompt = f"""
-            Cria feedback encorajador e personalizado para alguém que tentou dizer '{expected}' e o sistema reconheceu '{actual}'.
-            
-            Contexto adicional:
-            - Estilo do tutor: {persona['style']}
-            - Pontuação: {score}/10
-            - Avaliação técnica: {explanation}
-            - Tendência recente: {trend}
-            - Consistência: {consistency}
-            - Pontos fortes: {strengths_text}
-            - Áreas para melhorar: {areas_to_improve_text}
-            
-            Usa português europeu (de Portugal, não do Brasil).
-            Inclui dicas específicas baseadas nas áreas que precisam de melhoria.
-            Se a pontuação for alta (8+), seja muito positivo. Se for baixa (<5), seja encorajador mas honesto.
-            Seja conciso (máximo 3 frases).
-            """
+        evaluation["feedback"] = feedback
 
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system",
-                        "content": f"És um terapeuta da fala {persona['style']} que trabalha com crianças."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=150
-            )
-
-            feedback = response.choices[0].message.content.strip()
-
-            # Adicionar emoji da persona para personalização
-            if not feedback.endswith(("!", ".", "?")):
-                feedback += "."
-
-            feedback += f" {persona['emoji']}"
-
-            return feedback
-
-        except Exception as e:
-            self.logger.error(f"Erro gerando feedback personalizado: {str(e)}")
-            return f"Boa tentativa com '{expected}'! {persona['emoji']} Vamos continuar praticando."
-
-    def _update_user_progress(self, user_id: str, score: int, response: str, expected: str):
-        """
-        Atualiza o progresso do usuário e mantém um histórico de tentativas para análise
-        """
-        # Inicializar dados da sessão do usuário se necessário
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = {
-                "attempts": 0,
-                "total_score": 0,
-                "recent_attempts": [],
-                "session_start": datetime.datetime.now().isoformat()
-            }
-
-        session = self.user_sessions[user_id]
-
-        # Atualizar contadores
-        session["attempts"] += 1
-        session["total_score"] += score
-
-        # Registrar esta tentativa no histórico recente (manter máx. 10)
-        attempt = {
-            "timestamp": datetime.datetime.now().isoformat(),
-            "expected": expected,
-            "actual": response,
-            "score": score
-        }
-
-        # Manter histórico limitado para não ocupar muita memória
-        if "recent_attempts" not in session:
-            session["recent_attempts"] = []
-
-        session["recent_attempts"].append(attempt)
-        if len(session["recent_attempts"]) > 10:
-            session["recent_attempts"].pop(0)
-
-        # Atualizar progresso no GameDesigner
-        self.game_designer.update_progress(user_id, score)
-
-        self.logger.info(
-            f"Progresso atualizado para {user_id}: tentativas={session['attempts']}, "
-            f"pontuação_total={session['total_score']}, score_médio={session['total_score']/session['attempts']:.1f}")
+        return evaluation
 
     def _select_persona_for_user(self, user_id: str, age: int = None) -> Dict:
         """
-        Seleciona uma persona de tutor apropriada para o usuário
-        com base em preferências armazenadas ou idade
+        Seleciona uma persona apropriada para o usuário com base na idade e histórico
         """
-        # Se já temos uma persona armazenada para este usuário, mantê-la para consistência
+        # Se temos uma persona já escolhida para esta sessão, manter consistência
         if user_id in self.user_sessions and "persona" in self.user_sessions[user_id]:
             persona_key = self.user_sessions[user_id]["persona"]
-            if persona_key in self.tutor_personas:
-                return self.tutor_personas[persona_key]
+            return self.tutor_personas[persona_key]
 
-        # Para crianças mais novas, preferir persona animada
-        if age is not None:
+        if age:
+            # Escolher persona baseada na idade
             if age < 7:
-                persona_key = "animado"
-            elif age < 12:
+                # Mais engraçado/animado para crianças pequenas
                 persona_key = random.choice(["animado", "engraçado"])
+            elif age < 12:
+                # Mix de todas as personas para idade intermediária
+                persona_key = random.choice(list(self.tutor_personas.keys()))
             else:
-                persona_key = random.choice(["calmo", "engraçado"])
+                # Mais calmo/focado para adolescentes e adultos
+                persona_key = "calmo"
         else:
             # Se não temos idade, escolher aleatoriamente
             persona_key = random.choice(list(self.tutor_personas.keys()))
@@ -514,129 +387,105 @@ class TutorAgent:
 
         return self.tutor_personas[persona_key]
 
-    def _record_session_start(self, user_id: str, difficulty: str):
+    def _generate_personalized_feedback(self, score: int, explanation: str, expected: str,
+                                        actual: str, user_id: str, persona: Dict,
+                                        strengths: List = None, areas_to_improve: List = None) -> str:
         """
-        Registra o início de uma nova sessão para análise de longo prazo
+        Gera feedback personalizado com base nos resultados da avaliação e na persona do tutor
         """
-        # Inicializar histórico de interação se não existir
+        if score >= 9:
+            return f"Uau! {persona['emoji']} Excelente pronúncia de '{expected}'! {random.choice(persona['encouragements'])}"
+        elif score >= 7:
+            return f"Muito bem! {persona['emoji']} Boa pronúncia de '{expected}'. {random.choice(persona['encouragements'])}"
+        elif score >= 5:
+            tips = []
+            if areas_to_improve:
+                tips.extend(
+                    [f"Foca mais no som '{s}'" for s in areas_to_improve[:2]])
+            tips.append("Tenta falar mais devagar")
+            tip = random.choice(tips)
+            return f"Quase lá! {persona['emoji']} {tip} em '{expected}'. Vamos tentar novamente!"
+        else:
+            return f"Boa tentativa com '{expected}'! {persona['emoji']} Vamos continuar praticando."
+
+    def _evaluate_pronunciation(self, actual: str, expected: str) -> Dict[str, Any]:
+        """
+        Avalia a pronúncia comparando o texto falado com o esperado
+        Retorna score (0-10) e explicação
+        """
+        from difflib import SequenceMatcher
+        similarity = SequenceMatcher(None, actual.lower(),
+                                     expected.lower()).ratio()
+        score = int(similarity * 10)
+
+        if score >= 9:
+            explanation = "Pronúncia perfeita!"
+        elif score >= 7:
+            explanation = "Boa pronúncia, pequenos ajustes necessários."
+        elif score >= 5:
+            explanation = "Pronúncia OK, mas precisa melhorar alguns sons."
+        else:
+            explanation = "Vamos praticar mais este som."
+
+        return {
+            "score": score,
+            "explanation": explanation,
+            "similarity": similarity
+        }
+
+    def _get_expected_word(self, exercise: Dict[str, Any], game_type: str) -> str:
+        """Extrai a palavra ou frase esperada com base no tipo de jogo e exercício"""
+        if not exercise:
+            return ""
+
+        if game_type == "exercícios de pronúncia":
+            return exercise.get("word", "")
+        elif game_type == "histórias interativas":
+            return exercise.get("target_phrase", "")
+        elif game_type == "conjunto de imagens":
+            return exercise.get("target_word", "")
+        elif game_type == "frases contextuais":
+            return exercise.get("phrase", "")
+        else:
+            return exercise.get("target_text", "")
+
+    def _update_user_progress(self, user_id: str, score: int, response: str, expected: str):
+        """Atualiza o histórico de interações do usuário"""
         if user_id not in self.interaction_history:
             self.interaction_history[user_id] = {"sessions": []}
 
-        # Obter informações do jogo atual, se disponível
-        game_type = "desconhecido"
-        target_sound = "desconhecido"
+        session = self.interaction_history[user_id]["sessions"][-1] if self.interaction_history[user_id]["sessions"] else None
 
-        if user_id in self.game_designer.current_games:
-            current_game = self.game_designer.current_games[user_id]
-            game_type = current_game.get("game_type", "desconhecido")
-            target_sound = current_game.get("target_sound", "desconhecido")
+        if session and not session.get("complete", False):
+            # Atualizar sessão existente
+            session["responses"].append({
+                "expected": expected,
+                "actual": response,
+                "score": score,
+                "timestamp": datetime.datetime.now().isoformat()
+            })
 
-        # Registrar nova sessão
-        session = {
-            "date": datetime.datetime.now().isoformat(),
-            "difficulty": difficulty,
-            "game_type": game_type,
-            "target_sound": target_sound,
-            "performance": "pendente",  # Será atualizado no final da sessão
-            "complete": False
-        }
-
-        self.interaction_history[user_id]["sessions"].append(session)
-
-        # Limitar histórico a 20 sessões
-        if len(self.interaction_history[user_id]["sessions"]) > 20:
-            self.interaction_history[user_id]["sessions"].pop(0)
-
-    def complete_session(self, user_id: str):
-        """
-        Finaliza a sessão atual e atualiza o histórico com os resultados
-        """
-        if user_id not in self.interaction_history:
-            return
-
-        sessions = self.interaction_history[user_id]["sessions"]
-        if not sessions:
-            return
-
-        # Obter a sessão atual (mais recente)
-        current_session = sessions[-1]
-
-        # Calcular desempenho médio se tivermos dados de sessão
-        performance = "N/A"
-        if user_id in self.user_sessions:
-            session_data = self.user_sessions[user_id]
-            if session_data["attempts"] > 0:
-                avg_score = session_data["total_score"] / \
-                    session_data["attempts"]
-                if avg_score >= 8:
-                    performance = "excelente"
-                elif avg_score >= 6:
-                    performance = "bom"
-                elif avg_score >= 4:
-                    performance = "regular"
-                else:
-                    performance = "precisa melhorar"
-
-        # Atualizar os dados da sessão
-        current_session["performance"] = performance
-        current_session["complete"] = True
-        current_session["attempts"] = self.user_sessions[user_id]["attempts"] if user_id in self.user_sessions else 0
-
-        self.logger.info(
-            f"Sessão completa para usuário {user_id}: performance={performance}")
-
-        # Limpar dados da sessão atual
-        if user_id in self.user_sessions:
-            self.user_sessions[user_id] = {
-                "persona": self.user_sessions[user_id].get("persona", "animado")
-            }
-
-    def get_user_progress(self, user_id: str) -> Dict[str, Any]:
-        """
-        Retorna um resumo do progresso do usuário ao longo do tempo
-        """
-        progress = {
-            "recent_sessions": [],
-            "overall_performance": "N/A",
-            "improvement_trend": "estável",
-            "challenges": [],
-            "strengths": []
-        }
-
-        # Obter histórico de sessões
-        if user_id in self.interaction_history:
-            sessions = self.interaction_history[user_id]["sessions"]
-            completed_sessions = [s for s in sessions if s["complete"]]
-
-            if completed_sessions:
-                # Adicionar sessões recentes
-                # últimas 5 sessões
-                progress["recent_sessions"] = completed_sessions[-5:]
-
-                # Avaliar desempenho geral
-                performances = [s["performance"] for s in completed_sessions]
-                if performances:
-                    perf_map = {"excelente": 4, "bom": 3,
-                                "regular": 2, "precisa melhorar": 1, "N/A": 0}
-                    avg_perf = sum(perf_map.get(p, 0)
-                                   for p in performances) / len(performances)
-
-                    if avg_perf >= 3.5:
-                        progress["overall_performance"] = "excelente"
-                    elif avg_perf >= 2.5:
-                        progress["overall_performance"] = "bom"
-                    elif avg_perf >= 1.5:
-                        progress["overall_performance"] = "regular"
-                    else:
-                        progress["overall_performance"] = "precisa melhorar"
-
-                # Analisar tendência de melhoria
-                if len(completed_sessions) >= 3:
-                    recent_perfs = [perf_map.get(
-                        s["performance"], 0) for s in completed_sessions[-3:]]
-                    if all(recent_perfs[i] < recent_perfs[i+1] for i in range(len(recent_perfs)-1)):
-                        progress["improvement_trend"] = "melhorando"
-                    elif all(recent_perfs[i] > recent_perfs[i+1] for i in range(len(recent_perfs)-1)):
-                        progress["improvement_trend"] = "piorando"
-
-        return progress
+            # Calcular performance média da sessão
+            scores = [r["score"] for r in session["responses"]]
+            avg_score = sum(scores) / len(scores)
+            if avg_score >= 8:
+                session["performance"] = "excelente"
+            elif avg_score >= 6:
+                session["performance"] = "bom"
+            else:
+                session["performance"] = "precisa praticar mais"
+        else:
+            # Iniciar nova sessão
+            self.interaction_history[user_id]["sessions"].append({
+                "date": datetime.datetime.now().isoformat(),
+                "game_type": self.game_designer.current_games[user_id]["game_type"],
+                "target_sound": self.game_designer.current_games[user_id].get("target_sound", "variado"),
+                "responses": [{
+                    "expected": expected,
+                    "actual": response,
+                    "score": score,
+                    "timestamp": datetime.datetime.now().isoformat()
+                }],
+                "performance": "em andamento",
+                "complete": False
+            })

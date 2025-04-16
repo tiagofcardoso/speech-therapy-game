@@ -1,0 +1,60 @@
+{
+  "title": "Aventuras do Mágico M",
+  "description": "Ajuda o Mágico M a encontrar objetos que começam com a letra 'm'. Ao longo do caminho, as crianças praticam frases simples para melhorar a sua fala.",
+  "instructions": [
+    "Ouça a situação apresentada.",
+    "Repita a frase que o Mágico M diz.",
+    "Toque no objeto que começa com o som 'm'.",
+    "Repita a frase novamente.",
+    "Divirta-se ajudando o Mágico M!"
+  ],
+  "exercises": [
+    {
+      "situation": "O Mágico M quer pegar uma maçã.",
+      "phrase": "Eu quero uma maçã.",
+      "target_sounds": [
+        "m",
+        "ã"
+      ]
+    },
+    {
+      "situation": "O Mágico M encontrou um mapa.",
+      "phrase": "Este é o meu mapa.",
+      "target_sounds": [
+        "m"
+      ]
+    },
+    {
+      "situation": "O Mágico M vê um carro de noite.",
+      "phrase": "O carro é muito bonito.",
+      "target_sounds": [
+        "m"
+      ]
+    },
+    {
+      "situation": "O Mágico M tem um amigo chamado Marcos.",
+      "phrase": "Meu amigo é o Marcos.",
+      "target_sounds": [
+        "m"
+      ]
+    },
+    {
+      "situation": "O Mágico M encontra uma música.",
+      "phrase": "Eu gosto da música.",
+      "target_sounds": [
+        "m"
+      ]
+    }
+  ],
+  "target_skills": [
+    "Pronúncia do som 'm'",
+    "Formação de frases simples",
+    "Compreensão de situações contextuais",
+    "Fluência na fala",
+    "Aperfeiçoamento da escuta"
+  ],
+  "target_sound": "m",
+  "estimated_duration": "5-10 minutos",
+  "theme": "magia",
+  "visual_style": "colorido"
+}
