@@ -60,8 +60,23 @@ class GameDesignerAgent:
 
     def create_game(self, user_id: str, difficulty: Optional[str] = None, game_type: Optional[str] = None,
                     age_group: Optional[str] = "crianças", db_connector=None) -> Dict[str, Any]:
+
+        # Map frontend game types to backend types
+        game_type_mapping = {
+            'syllables': 'separação silábica',
+            'stress': 'sílaba tônica',
+            'diphthongs': 'ditongos',
+            'triphthongs': 'tritongos',
+            'articulation': 'articulação',
+            'vocabulary': 'vocabulário',
+            'fluency': 'fluência',
+            'pragmatic': 'pragmática'
+        }
+
+        mapped_type = game_type_mapping.get(game_type, game_type)
+
         self.logger.info(
-            f"GameDesignerAgent.create_game called by MCP coordinator for user {user_id}")
+            f"Creating game for user {user_id}: difficulty={difficulty}, type={mapped_type}, age_group={age_group}")
 
         # Considerar preferências do usuário, se disponíveis
         user_prefs = self.user_preferences.get(user_id, {})
@@ -73,15 +88,15 @@ class GameDesignerAgent:
             difficulty = self._get_user_difficulty(user_id)
 
         # Escolha tipo de jogo baseado em preferências ou análise de desempenho
-        if game_type not in self.game_types:
-            game_type = self._get_appropriate_game_type(user_id)
+        if mapped_type not in self.game_types:
+            mapped_type = self._get_appropriate_game_type(user_id)
 
         # Verificação do grupo etário
         age_group = age_group if age_group in [
             "crianças", "adultos"] else "crianças"
 
         self.logger.info(
-            f"Creating game for user {user_id}: difficulty={difficulty}, type={game_type}, age_group={age_group}")
+            f"Creating game for user {user_id}: difficulty={difficulty}, type={mapped_type}, age_group={age_group}")
 
         # Considerar pontos fracos do usuário ao gerar conteúdo
         weak_sounds = user_prefs.get("weak_sounds", [])
@@ -101,11 +116,11 @@ class GameDesignerAgent:
             game_content = previous_game["content"]
             game_id = previous_game["game_id"]
             difficulty = previous_game["difficulty"]
-            game_type = previous_game["game_type"]
+            mapped_type = previous_game["game_type"]
         else:
             # Gerar novo conteúdo usando o LLM
             game_content = self._generate_content(
-                difficulty, game_type, age_group, target_sound, user_prefs)
+                difficulty, mapped_type, age_group, target_sound, user_prefs)
             # Gerar um ID de jogo estruturado
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
             game_id = f"game-{timestamp}-{user_id[:5]}"
@@ -114,7 +129,7 @@ class GameDesignerAgent:
         self.current_games[user_id] = {
             "game_id": game_id,
             "difficulty": difficulty,
-            "game_type": game_type,
+            "game_type": mapped_type,
             "age_group": age_group,
             "content": game_content,
             "current_index": 0,
@@ -132,8 +147,8 @@ class GameDesignerAgent:
         return {
             "game_id": game_id,
             "difficulty": difficulty,
-            "game_type": game_type,
-            "title": game_content.get("title", f"Jogo de {game_type.capitalize()}"),
+            "game_type": mapped_type,
+            "title": game_content.get("title", f"Jogo de {mapped_type.capitalize()}"),
             "description": game_content.get("description", "Exercício de terapia da fala"),
             "instructions": game_content.get("instructions", ["Siga as instruções do jogo"]),
             "content": game_content.get("exercises", []),

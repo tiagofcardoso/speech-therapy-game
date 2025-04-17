@@ -320,11 +320,27 @@ const GamePlay = () => {
         setAudioLevels(Array(10).fill(0));
     };
 
+    const evaluatePronunciation = async (audioBlob, expectedWord) => {
+        if (!expectedWord) {
+            console.error("Missing expected word for pronunciation evaluation");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob);
+        formData.append('expected_word', expectedWord);
+
+        try {
+            const response = await api.post('/api/evaluate-pronunciation', formData);
+            return response.data;
+        } catch (error) {
+            console.error("Pronunciation evaluation error:", error);
+            throw error;
+        }
+    };
+
     const evaluateResponse = async (audioBlob) => {
         try {
-            const formData = new FormData();
-            formData.append("audio", audioBlob);
-
             const currentExercise = getCurrentExercise();
             if (!currentExercise) {
                 console.error("No current exercise found");
@@ -333,22 +349,17 @@ const GamePlay = () => {
             }
 
             console.log("Sending evaluation for word:", currentExercise.word);
-            formData.append("expected_word", currentExercise.word);
 
             // Montrer la mascotte en train de réfléchir pendant l'évaluation
             setMascotMood('thinking');
             setMascotMessage("Estou a avaliar a tua pronúncia...");
 
             // Enviar para o backend para avaliação
-            const response = await api.post('/api/evaluate-pronunciation', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            const response = await evaluatePronunciation(audioBlob, currentExercise.word);
 
-            console.log("Evaluation response:", response.data);
+            console.log("Evaluation response:", response);
 
-            const { isCorrect, score, feedback, audio_feedback, recognized_text } = response.data;
+            const { isCorrect, score, feedback, audio_feedback, recognized_text } = response;
 
             setFeedback({
                 correct: isCorrect,

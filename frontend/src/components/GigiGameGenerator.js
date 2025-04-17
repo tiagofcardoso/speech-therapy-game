@@ -133,6 +133,10 @@ const GigiGameGenerator = () => {
                                 <option value="vocabulary">Vocabulário e Linguagem</option>
                                 <option value="fluency">Fluência</option>
                                 <option value="pragmatic">Linguagem Pragmática</option>
+                                <option value="diphthongs">Ditongos</option>
+                                <option value="triphthongs">Tritongos</option>
+                                <option value="stress">Sílaba Tónica</option>
+                                <option value="syllables">Separação de Sílabas</option>
                             </select>
                         </div>
 
@@ -210,7 +214,13 @@ const GigiGameGenerator = () => {
                         <span className="game-badge type">
                             {generatedGame.game_type === 'articulation' ? 'Articulação' :
                                 generatedGame.game_type === 'vocabulary' ? 'Vocabulário' :
-                                    generatedGame.game_type === 'fluency' ? 'Fluência' : 'Pragmática'}
+                                    generatedGame.game_type === 'fluency' ? 'Fluência' :
+                                        generatedGame.game_type === 'pragmatic' ? 'Linguagem Pragmática' :
+                                            generatedGame.game_type === 'diphthongs' ? 'Ditongos' :
+                                                generatedGame.game_type === 'triphthongs' ? 'Tritongos' :
+                                                    generatedGame.game_type === 'stress' ? 'Sílaba Tónica' :
+                                                        generatedGame.game_type === 'syllables' ? 'Separação de Sílabas' :
+                                                            'Outros'}
                         </span>
                         <span className="game-badge difficulty">
                             {generatedGame.difficulty === 'beginner' ? 'Iniciante' :
@@ -273,6 +283,22 @@ const GigiGameGenerator = () => {
                     <div className="game-type-card pragmatic">
                         <h4>Pragmática</h4>
                         <p>Jogos para melhorar as habilidades de comunicação social.</p>
+                    </div>
+                    <div className="game-type-card diphthongs">
+                        <h4>Ditongos</h4>
+                        <p>Jogos para praticar a pronúncia correta de ditongos do português.</p>
+                    </div>
+                    <div className="game-type-card triphthongs">
+                        <h4>Tritongos</h4>
+                        <p>Exercícios focados na articulação de tritongos.</p>
+                    </div>
+                    <div className="game-type-card stress">
+                        <h4>Sílaba Tónica</h4>
+                        <p>Jogos para identificar e praticar a acentuação das palavras.</p>
+                    </div>
+                    <div className="game-type-card syllables">
+                        <h4>Separação de Sílabas</h4>
+                        <p>Atividades para desenvolver a consciência silábica.</p>
                     </div>
                 </div>
             </div>

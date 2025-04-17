@@ -1,0 +1,44 @@
+{
+  "title": "Adivinha o ",
+  "description": "Vamos adivinhar palavras com o som 't'! Ouça com atenção e tente descobrir a palavra que estamos pensando.",
+  "instructions": [
+    "Ouça a dica com atenção",
+    "Pense na palavra que começa com o som 't'",
+    "Diga a sua resposta em voz alta",
+    "Se precisar, pergunte 'qual é a resposta?'",
+    "Divirta-se enquanto joga!"
+  ],
+  "exercises": [
+    {
+      "clue": "Eu sou um animal que faz 'miau' e eu gosto de brincar com novelo. Quem sou eu?",
+      "answer": "gato"
+    },
+    {
+      "clue": "Eu sou uma fruta amarela e é deliciosa. Quem sou eu?",
+      "answer": "banana"
+    },
+    {
+      "clue": "Eu sou uma comida redonda e você pode colocar molho em mim. Quem sou eu?",
+      "answer": "pizza"
+    },
+    {
+      "clue": "Eu sou um objeto que ilumina a sua casa à noite. Quem sou eu?",
+      "answer": "luz"
+    },
+    {
+      "clue": "Eu sou um lugar onde você pode ver muitos livros e ler histórias. Quem sou eu?",
+      "answer": "biblioteca"
+    }
+  ],
+  "target_skills": [
+    "Reconhecimento de sons",
+    "Pronúncia de palavras",
+    "Desenvolvimento de vocabulário",
+    "Escuta ativa",
+    "Compreensão verbal"
+  ],
+  "target_sound": "t",
+  "estimated_duration": "5-10 minutos",
+  "theme": "animais",
+  "visual_style": "colorido"
+}

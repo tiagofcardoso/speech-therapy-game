@@ -10,6 +10,8 @@ import time  # Adicionar importação do time
 import uuid
 import base64
 import tempfile
+import subprocess
+from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
 # Import app instance and JWT_SECRET_KEY from config
 from config import DEBUG, OPENAI_API_KEY, app, JWT_SECRET_KEY
 from bson import ObjectId
@@ -751,172 +753,154 @@ def synthesize_speech_endpoint():
 @token_required
 def evaluate_pronunciation(user_id):
     try:
+        # Validate request
         if 'audio' not in request.files:
-            return jsonify({"success": False, "message": "Nenhum arquivo de áudio encontrado"}), 400
+            print("❌ Error: No audio file in request")
+            return jsonify({
+                "success": False,
+                "message": "No audio file provided",
+                "error_code": "NO_AUDIO"
+            }), 400
 
         audio_file = request.files['audio']
-        expected_word = request.form.get('expected_word', '')
+        expected_word = request.form.get('expected_word')
 
-        if not expected_word:
-            return jsonify({"success": False, "message": "Palavra esperada não fornecida"}), 400
+        if not expected_word or expected_word.strip() == '':
+            print("❌ Error: No expected word provided")
+            return jsonify({
+                "success": False,
+                "message": "Expected word not provided",
+                "error_code": "NO_EXPECTED_WORD"
+            }), 400
 
-        # Mostrar informações sobre o arquivo recebido para debug
+        # Log request details for debugging
+        print(f"Processing pronunciation evaluation:")
         print(
-            f"Arquivo de áudio recebido: {audio_file.filename}, tipo MIME: {audio_file.content_type}")
-        print(f"Palavra esperada: '{expected_word}'")
+            f"- Audio file: {audio_file.filename} ({audio_file.content_type})")
+        print(f"- Expected word: '{expected_word}'")
+        print(f"- User ID: {user_id}")
 
-        # 1. Salvar o arquivo de áudio temporariamente
+        # 1. Save audio file temporarily
         temp_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.webm"
         audio_file.save(temp_path)
-        print(f"Arquivo de áudio salvo em: {temp_path}")
+        print(f"✓ Audio saved to: {temp_path}")
 
-        # 2. Converter o arquivo WebM para WAV usando FFmpeg se disponível
         try:
-            import subprocess
+            # 2. Convert WebM to WAV using ffmpeg
             wav_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.wav"
+
+            # More robust ffmpeg conversion
             result = subprocess.run([
-                'ffmpeg', '-i', temp_path, '-acodec', 'pcm_s16le',
-                '-ar', '16000', '-ac', '1', wav_path
-            ], capture_output=True)
+                'ffmpeg',
+                '-y',  # Overwrite output file if it exists
+                '-i', temp_path,
+                '-acodec', 'pcm_s16le',
+                '-ar', '16000',
+                '-ac', '1',
+                wav_path
+            ], capture_output=True, text=True)
 
             if result.returncode == 0:
-                print(f"Arquivo convertido com sucesso para WAV: {wav_path}")
-                # Passar a palavra esperada para o reconhecedor de fala
-                recognized_text = recognize_speech(wav_path, expected_word)
+                print(f"✓ Audio converted successfully to WAV: {wav_path}")
+                audio_path = wav_path
             else:
-                print("Falha ao converter áudio. Tentando reconhecimento direto.")
-                recognized_text = recognize_speech(temp_path, expected_word)
+                print(f"⚠️ FFmpeg conversion error: {result.stderr}")
+                audio_path = temp_path
+
         except Exception as e:
-            print(f"Erro ao converter áudio: {e}")
-            recognized_text = recognize_speech(temp_path, expected_word)
+            print(f"⚠️ Audio conversion error: {str(e)}")
+            audio_path = temp_path
 
-        print(f"Texto reconhecido: '{recognized_text}'")
-        print(
-            f"Comparação: Esperado='{expected_word}' | Reconhecido='{recognized_text}'")
-
-        # 3. Se o reconhecimento falhar, fornecer feedback genérico com voz
-        if not recognized_text or recognized_text == "Texto não reconhecido":
-            print("AVISO: Texto não reconhecido pelo STT")
-
-            # Para palavras muito curtas (1-2 letras), considerar a palavra esperada se houver áudio
-            if expected_word and len(expected_word) <= 2:
-                print(
-                    f"Palavra muito curta ('{expected_word}'). Assumindo pronúncia correta para sílaba simples.")
-                feedback_message = "Obrigado pela tua pronúncia. Vamos continuar com o próximo exercício."
-                feedback_audio = synthesize_speech(feedback_message)
-
-                return jsonify({
-                    "success": True,
-                    "isCorrect": True,
-                    "score": 7,  # Score mais baixo para casos duvidosos
-                    "recognized_text": expected_word,  # Usar a palavra esperada
-                    "feedback": feedback_message,
-                    "audio_feedback": feedback_audio
-                })
-            else:
-                feedback_message = "Não consegui entender o que disseste. Por favor, tenta novamente falando mais claramente."
-                feedback_audio = synthesize_speech(feedback_message)
-
-                return jsonify({
-                    "success": True,
-                    "isCorrect": False,
-                    "score": 3,
-                    "recognized_text": "",
-                    "feedback": feedback_message,
-                    "audio_feedback": feedback_audio
-                })
-
-        # 4. Avaliar a pronúncia usando o speech evaluator
-        from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
-        evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
-
-        print(
-            f"Iniciando avaliação de pronúncia para: '{recognized_text}' (esperado: '{expected_word}')")
+        # 3. Attempt speech recognition
         try:
+            recognized_text = recognize_speech(audio_path, expected_word)
+            print(f"✓ Recognition result: '{recognized_text}'")
+        except Exception as e:
+            print(f"⚠️ Speech recognition error: {str(e)}")
+            recognized_text = "Text not recognized"
+
+        # 4. Handle failed recognition
+        if not recognized_text or recognized_text == "Text not recognized":
+            print("⚠️ Speech not recognized")
+            feedback = "Não consegui entender. Por favor, fale mais claramente."
+            audio_feedback = synthesize_speech(feedback)
+
+            # Clean up temp files
+            try:
+                os.remove(temp_path)
+                if 'wav_path' in locals():
+                    os.remove(wav_path)
+            except Exception as e:
+                print(f"⚠️ Error cleaning temp files: {e}")
+
+            return jsonify({
+                "success": True,
+                "isCorrect": False,
+                "score": 3,
+                "recognized_text": "",
+                "feedback": feedback,
+                "audio_feedback": audio_feedback
+            })
+
+        # 5. Initialize speech evaluator
+        try:
+            evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
             evaluation = evaluator.evaluate_speech(
                 spoken_text=recognized_text,
                 expected_text=expected_word,
                 difficulty="medium"
             )
-        except Exception as eval_error:
-            print(f"Erro na avaliação de pronúncia: {str(eval_error)}")
-            traceback.print_exc()
-            # Fornecer uma avaliação padrão em caso de erro
+        except Exception as e:
+            print(f"⚠️ Speech evaluation error: {str(e)}")
             evaluation = {
                 "accuracy": 0.5,
-                "score": 50,
-                "details": {
-                    "phonetic_analysis": "Não foi possível completar a análise fonética detalhada."
-                },
+                "details": {"phonetic_analysis": "Houve um problema na avaliação."},
                 "strengths": [],
-                "improvement_areas": ["Pronúncia geral"]
+                "improvement_areas": []
             }
 
-        # 5. Gerar feedback detalhado
+        # 6. Generate feedback
         accuracy_score = int(evaluation.get("accuracy", 0.5) * 10)
-        is_correct = accuracy_score >= 7  # Considerar correto se score >= 7
+        is_correct = accuracy_score >= 7
 
-        # Extrair dados da avaliação com tratamento para campos ausentes
-        matched_sounds = evaluation.get("strengths", [])
-        challenging_sounds = evaluation.get("improvement_areas", [])
+        feedback_text = evaluation.get("details", {}).get(
+            "phonetic_analysis",
+            "Boa pronúncia!" if is_correct else "Continua a praticar."
+        )
 
-        # Obter feedback detalhado, com fallback para campo details.phonetic_analysis
-        if "details" in evaluation and "phonetic_analysis" in evaluation["details"]:
-            detailed_feedback = evaluation["details"]["phonetic_analysis"]
-        else:
-            detailed_feedback = "Análise da pronúncia: " + ("Boa pronúncia!" if is_correct
-                                                            else "Alguns sons precisam ser melhorados.")
+        # 7. Generate audio feedback
+        try:
+            audio_feedback = synthesize_speech(feedback_text)
+        except Exception as e:
+            print(f"⚠️ Error generating audio feedback: {e}")
+            audio_feedback = None
 
-        # 6. Gerar feedback em áudio apenas se houver texto para sintetizar
-        audio_feedback = None
-        if detailed_feedback:
-            try:
-                audio_feedback = synthesize_speech(detailed_feedback)
-            except Exception as audio_error:
-                print(
-                    f"Erro ao sintetizar feedback em áudio: {str(audio_error)}")
-
-        # 7. Limpar arquivos temporários
+        # 8. Clean up temp files
         try:
             os.remove(temp_path)
-            if 'wav_path' in locals() and os.path.exists(wav_path):
+            if 'wav_path' in locals():
                 os.remove(wav_path)
         except Exception as e:
-            print(f"Erro ao remover arquivos temporários: {e}")
-
-        # Garantir que temos feedback de áudio, mesmo que seja um fallback
-        if not audio_feedback:
-            fallback_text = "Obrigado pela tua pronúncia!"
-            if is_correct:
-                fallback_text += " Muito bem!"
-            else:
-                fallback_text += " Continua a praticar!"
-            audio_feedback = synthesize_speech(fallback_text)
+            print(f"⚠️ Error cleaning temp files: {e}")
 
         return jsonify({
             "success": True,
             "isCorrect": is_correct,
             "score": accuracy_score,
             "recognized_text": recognized_text,
-            "matched_sounds": matched_sounds,
-            "challenging_sounds": challenging_sounds,
-            "feedback": detailed_feedback or "Análise de pronúncia concluída.",
+            "matched_sounds": evaluation.get("strengths", []),
+            "challenging_sounds": evaluation.get("improvement_areas", []),
+            "feedback": feedback_text,
             "audio_feedback": audio_feedback
         })
 
     except Exception as e:
-        print(f"Erro na avaliação de pronúncia: {str(e)}")
+        print(f"❌ Pronunciation evaluation error: {str(e)}")
         traceback.print_exc()
-
-        # Fornecer resposta de erro com feedback de áudio
-        error_message = "Ocorreu um erro durante a avaliação. Por favor, tenta novamente."
-        error_audio = synthesize_speech(error_message)
-
         return jsonify({
             "success": False,
-            "message": f"Erro: {str(e)}",
-            "feedback": error_message,
-            "audio_feedback": error_audio
+            "message": f"Error: {str(e)}",
+            "error_code": "EVALUATION_FAILED"
         }), 500
 
 
@@ -934,9 +918,6 @@ def options_gigi_game_generator():
 @app.route('/api/gigi/generate-game', methods=['POST'])
 @token_required
 def generate_gigi_game(user_id):
-    """
-    Endpoint para a Gigi gerar um novo jogo personalizado
-    """
     try:
         print("Received request for Gigi game generation")
         print(f"User ID: {user_id}")
@@ -944,13 +925,23 @@ def generate_gigi_game(user_id):
         data = request.get_json() or {}
         print(f"Request data: {data}")
 
-        # Extract parameters from request
-        game_type = data.get('game_type')
-        difficulty = data.get('difficulty')
+        # Extract and validate parameters from request
+        game_type = data.get('game_type', "exercícios de pronúncia")
 
-        # Always use 'exercícios de pronúncia' as default type
-        if not game_type:
-            game_type = "exercícios de pronúncia"
+        # Map difficulty values to ensure consistency
+        difficulty_map = {
+            'advanced': 'avançado',
+            'medium': 'médio',
+            'beginner': 'iniciante'
+        }
+
+        # Get difficulty from request and map it, default to 'iniciante'
+        requested_difficulty = data.get('difficulty', 'beginner')
+        difficulty = difficulty_map.get(
+            requested_difficulty.lower(), 'iniciante')
+
+        print(
+            f"Mapped difficulty from '{requested_difficulty}' to '{difficulty}'")
 
         # Make sure the MCP coordinator is initialized
         global game_generator, mcp_coordinator
@@ -962,64 +953,54 @@ def generate_gigi_game(user_id):
                     "message": "Não foi possível inicializar os serviços de jogo"
                 }), 500
 
-        # Use the game_designer to create a game
+        # Use the game_designer to create a game with the correct difficulty
         try:
             game_data = mcp_coordinator.game_designer.create_game(
                 user_id=user_id,
                 difficulty=difficulty,
                 game_type=game_type
             )
+
+            # Save the generated game to database
+            game_id = db.store_game(user_id, game_data)
+
+            # Return the game data to the client
+            return jsonify({
+                "success": True,
+                "game": {
+                    "game_id": str(game_id),
+                    "title": game_data.get("title", "Novo Jogo"),
+                    "difficulty": difficulty,
+                    "game_type": game_type,
+                    "content": game_data.get("content", [])
+                }
+            })
+
         except Exception as game_error:
             print(f"Erro ao gerar jogo: {str(game_error)}")
             traceback.print_exc()
 
-            # Fallback para o game_generator se o primeiro método falhar
+            # Fallback to game_generator
             game_data = game_generator.create_game(
                 user_id=user_id,
                 difficulty=difficulty,
                 game_type=game_type
             )
 
-        # Ensure the game structure is compatible with frontend
-        exercises = []
-        raw_exercises = game_data.get("content", [])
+            # Save the fallback game
+            game_id = db.store_game(user_id, game_data)
 
-        for idx, exercise in enumerate(raw_exercises):
-            transformed_exercise = {
-                "word": exercise.get("word", exercise.get("text", "")),
-                "prompt": exercise.get("prompt", exercise.get("tip", "Pronuncie esta palavra")),
-                "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
-                "visual_cue": exercise.get("visual_cue", exercise.get("word", "")),
-                "index": idx,
-                "total": len(raw_exercises)
-            }
-            exercises.append(transformed_exercise)
-
-        # Create the final game object
-        compatible_game = {
-            "game_id": game_data.get("game_id", str(uuid.uuid4())),
-            "title": game_data.get("title", "Jogo de Pronúncia Personalizado"),
-            "description": game_data.get("description", "Jogo gerado pela Gigi para praticar pronúncia"),
-            "instructions": game_data.get("instructions", "Pronuncie cada palavra claramente"),
-            "difficulty": game_data.get("difficulty", difficulty or "iniciante"),
-            "game_type": game_type,
-            "content": exercises,
-            "metadata": game_data.get("metadata", {})
-        }
-
-        # Store the game in the database
-        try:
-            game_id = db.store_game(user_id, compatible_game)
-            compatible_game["game_id"] = str(game_id)
-            print(f"Jogo salvo no banco de dados com ID: {game_id}")
-        except Exception as e:
-            print(
-                f"Atenção: Não foi possível salvar o jogo no banco de dados: {str(e)}")
-
-        return jsonify({
-            "success": True,
-            "game": compatible_game
-        })
+            # Return the fallback game data
+            return jsonify({
+                "success": True,
+                "game": {
+                    "game_id": str(game_id),
+                    "title": game_data.get("title", "Novo Jogo"),
+                    "difficulty": difficulty,
+                    "game_type": game_type,
+                    "content": game_data.get("content", [])
+                }
+            })
 
     except Exception as e:
         print(f"Erro na geração do jogo pela Gigi: {str(e)}")

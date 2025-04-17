@@ -48,6 +48,10 @@ const GameGenerator = () => {
                     <option value="vocabulary">Vocabulário e Linguagem</option>
                     <option value="fluency">Fluência</option>
                     <option value="pragmatic">Linguagem Pragmática</option>
+                    <option value="pragmatic">Ditongos</option>
+                    <option value="pragmatic">Tritongos</option>
+                    <option value="pragmatic">Sílaba Tónica</option>
+                    <option value="pragmatic">Separação de Silabas</option>
                 </select>
             </div>
 
