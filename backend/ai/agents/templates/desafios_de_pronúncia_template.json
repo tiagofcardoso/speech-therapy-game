@@ -1,0 +1,42 @@
+{
+  "title": "Pato Pronunciador",
+  "description": "Ajude o sapo a pronunciar corretamente o som 'p' para avançar na lagoa!",
+  "instructions": [
+    "Escute as frases com atenção.",
+    "Repita as frases em voz alta.",
+    "Tente fazer o som 'p' de forma clara.",
+    "Clique no botão para continuar para o próximo desafio."
+  ],
+  "exercises": [
+    {
+      "sentence": "O pato pula.",
+      "challenge": "Diga 'pato' e 'pula' bem alto!"
+    },
+    {
+      "sentence": "A panela está quente.",
+      "challenge": "Pronuncie 'panela' e 'quente' com clareza!"
+    },
+    {
+      "sentence": "O pão é gostoso.",
+      "challenge": "Foque bem no som de 'pão' ao dizer!"
+    },
+    {
+      "sentence": "A pipoca estoura.",
+      "challenge": "Repita 'pipoca' com força e energia!"
+    },
+    {
+      "sentence": "O peixe nada.",
+      "challenge": "Diga 'peixe' e faça o som 'p' com atenção!"
+    }
+  ],
+  "target_skills": [
+    "Pronúncia clara",
+    "Reconhecimento de sons",
+    "Controle da fala",
+    "Confiança na comunicação"
+  ],
+  "target_sound": "p",
+  "estimated_duration": "5-10 minutos",
+  "theme": "animais",
+  "visual_style": "colorido"
+}

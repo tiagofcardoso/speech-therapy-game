@@ -321,9 +321,17 @@ const GamePlay = () => {
     };
 
     const evaluatePronunciation = async (audioBlob, expectedWord) => {
-        if (!expectedWord) {
+        if (!expectedWord || expectedWord.trim() === '') {
             console.error("Missing expected word for pronunciation evaluation");
-            return;
+            // Return a default response for empty words
+            return {
+                success: true,
+                isCorrect: false,
+                score: 0,
+                recognized_text: "",
+                feedback: "Não foi possível avaliar a pronúncia: palavra não definida.",
+                audio_feedback: null
+            };
         }
 
         const formData = new FormData();

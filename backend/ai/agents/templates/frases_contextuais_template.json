@@ -1,0 +1,59 @@
+{
+  "title": "Aventuras no Reino do Nh",
+  "description": "Uma emocionante jornada através do reino mágico do 'Nh', onde as crianças vão praticar frases completas em situações divertidas.",
+  "instructions": [
+    "Leia a situação apresentada.",
+    "Escute a frase completa que precisa ser praticada.",
+    "Repita a frase em voz alta, focando no som 'nh'.",
+    "Escolha a figura que melhor representa a frase.",
+    "Complete a frase com a palavra correta se solicitado."
+  ],
+  "exercises": [
+    {
+      "situation": "Você está no parque e vê uma garotinha fazer um lindo desenho.",
+      "phrase": "Ela desenha um elefante gigante na terra.",
+      "target_sounds": [
+        "nh"
+      ]
+    },
+    {
+      "situation": "Você está ajudando na cozinha e vê sua mãe preparando um molho.",
+      "phrase": "A minha mãe faz um molho delicioso com cebola e linguini.",
+      "target_sounds": [
+        "nh"
+      ]
+    },
+    {
+      "situation": "Você está contando uma história sobre um dinossauro.",
+      "phrase": "O dinossauro tinha um coração muito grande e gentil.",
+      "target_sounds": [
+        "nh"
+      ]
+    },
+    {
+      "situation": "Você está em uma festa de aniversário bastante animada.",
+      "phrase": "As crianças cantam e dançam felizes na festa.",
+      "target_sounds": [
+        "nh"
+      ]
+    },
+    {
+      "situation": "Você encontrou um amigo que tem um novo cachorro.",
+      "phrase": "O cachorro do meu amigo é muito brincalhão e energético.",
+      "target_sounds": [
+        "nh"
+      ]
+    }
+  ],
+  "target_skills": [
+    "Pronúncia correta de consoantes complexas",
+    "Construção de frases completas",
+    "Compreensão contextual de frases",
+    "Aprimoramento da fluência verbal",
+    "Expansão do vocabulário"
+  ],
+  "target_sound": "nh",
+  "estimated_duration": "10-15 minutos",
+  "theme": "aventura mágica",
+  "visual_style": "colorido e divertido"
+}

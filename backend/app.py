@@ -497,18 +497,60 @@ def start_game(user_id):
                     else:
                         raw_exercises = []
 
+                    # Verificar se temos exercícios válidos
+                    if not raw_exercises:
+                        print(
+                            "⚠️ Nenhum exercício encontrado no jogo. Criando exercícios padrão.")
+                        # Criar exercícios padrão com base no título ou tipo de jogo
+                        raw_exercises = [
+                            {
+                                "word": "teste",
+                                "prompt": "Pronuncie esta palavra",
+                                "hint": "Fale devagar",
+                                "visual_cue": "teste"
+                            },
+                            {
+                                "word": "jogo",
+                                "prompt": "Diga esta palavra",
+                                "hint": "Fale com clareza",
+                                "visual_cue": "jogo"
+                            }
+                        ]
+
                     # Transformar os exercícios para o formato esperado pela sessão
                     for idx, exercise in enumerate(raw_exercises):
                         if not isinstance(exercise, dict):
                             continue
 
+                        # Obter a palavra do exercício, garantindo que não seja vazia
+                        word = exercise.get("word", exercise.get(
+                            "text", exercise.get("answer", "")))
+                        # Se a palavra for vazia, usar uma palavra padrão com base no índice
+                        if not word:
+                            word = f"palavra{idx+1}"
+                            print(
+                                f"⚠️ Palavra vazia detectada no exercício {idx}, usando '{word}' como fallback")
+
                         transformed_exercise = {
-                            "word": exercise.get("word", exercise.get("text", exercise.get("answer", ""))),
+                            "word": word,
                             "prompt": exercise.get("prompt", exercise.get("tip", "Pronuncie esta palavra")),
                             "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
-                            "visual_cue": exercise.get("visual_cue", exercise.get("word", ""))
+                            "visual_cue": exercise.get("visual_cue", word)
                         }
                         exercises.append(transformed_exercise)
+
+                    # Verificar se conseguimos processar ao menos um exercício
+                    if not exercises:
+                        print(
+                            "⚠️ Falha ao processar exercícios. Criando exercício padrão.")
+                        exercises = [
+                            {
+                                "word": "teste",
+                                "prompt": "Pronuncie esta palavra",
+                                "hint": "Fale devagar",
+                                "visual_cue": "teste"
+                            }
+                        ]
 
                     # Criar sessão a partir do jogo existente
                     session_data = {
@@ -528,6 +570,7 @@ def start_game(user_id):
                     }
             except Exception as e:
                 print(f"Erro ao buscar jogo {game_id}: {str(e)}")
+                traceback.print_exc()
                 # Continuar mesmo se o jogo não for encontrado
 
         # Se a sessão não foi criada a partir de um jogo existente, criar uma nova com o MCP
@@ -557,6 +600,10 @@ def start_game(user_id):
         # Obter primeiro exercício
         if "exercises" in session_data and len(session_data["exercises"]) > 0:
             current_exercise = session_data["exercises"][0]
+            # Verificação adicional para garantir que o primeiro exercício tenha uma palavra válida
+            if not current_exercise.get("word"):
+                current_exercise["word"] = "palavra1"
+                print("⚠️ Primeira palavra vazia, substituída por 'palavra1'")
         else:
             print("⚠️ Nenhum exercício encontrado na sessão. Criando exercício padrão.")
             # Criar um exercício padrão se não houver exercícios na sessão
@@ -573,10 +620,11 @@ def start_game(user_id):
             "session_id": session_data["session_id"],
             "instructions": session_data.get("instructions", ["Bem-vindo ao jogo de pronúncia!"]),
             "current_exercise": {
-                "word": current_exercise.get("word", ""),
+                # Garantir palavra padrão
+                "word": current_exercise.get("word", "teste"),
                 "prompt": current_exercise.get("prompt", "Pronuncie esta palavra"),
                 "hint": current_exercise.get("hint", "Fale devagar"),
-                "visual_cue": current_exercise.get("visual_cue", "Uma imagem apareceria aqui"),
+                "visual_cue": current_exercise.get("visual_cue", current_exercise.get("word", "teste")),
                 "index": 0,
                 "total": len(session_data.get("exercises", []))
             }

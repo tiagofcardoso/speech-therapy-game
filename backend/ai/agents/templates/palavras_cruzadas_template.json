@@ -1,0 +1,49 @@
+{
+  "title": "Cruzadas do Riso Rítmico",
+  "description": "Um jogo divertido de palavras cruzadas que desafia você a pronunciar palavras com o som 'rr'. A cada acerto, você fica mais forte na comunicação!",
+  "instructions": [
+    "Leia as dicas com atenção.",
+    "Procure as respostas que contêm o som 'rr'.",
+    "Preencha as palavras no grid de palavras cruzadas.",
+    "Leia em voz alta as palavras que você preencher.",
+    "Divirta-se enquanto treina sua fala!"
+  ],
+  "exercises": [
+    {
+      "clue": "Instrumento musical de cordas que pode ser tocado em festivais",
+      "word": "viola",
+      "position": "horizontal"
+    },
+    {
+      "clue": "Brasil é o maior produtor deste grão usado na alimentação",
+      "word": "arroz",
+      "position": "vertical"
+    },
+    {
+      "clue": "Ação de correr rapidamente, muitas vezes em uma competição",
+      "word": "corrida",
+      "position": "horizontal"
+    },
+    {
+      "clue": "Marinheiros têm esse amigo sempre ao lado em aventuras no mar",
+      "word": "barco",
+      "position": "vertical"
+    },
+    {
+      "clue": "Emprego que reúne muitas partes em um trabalho de equipe",
+      "word": "colaboração",
+      "position": "horizontal"
+    }
+  ],
+  "target_skills": [
+    "Pronúncia correta do som 'rr'",
+    "Expansão do vocabulário",
+    "Compreensão de frases completas",
+    "Desenvolvimento da fluência verbal",
+    "Aumento da confiança na fala"
+  ],
+  "target_sound": "rr",
+  "estimated_duration": "10-15 minutos",
+  "theme": "aventura",
+  "visual_style": "colorido"
+}

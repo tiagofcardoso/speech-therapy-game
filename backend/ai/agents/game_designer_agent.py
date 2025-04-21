@@ -596,7 +596,8 @@ class GameDesignerAgent:
             user_prompt = (
                 f"Crie um jogo de terapia da fala do tipo '{game_type}' em português para {age_group}, "
                 f"nível '{difficulty}', focado no som '{target_sound}'. "
-                "Inclua um título criativo, descrição, instruções claras (em lista), 5 exercícios e metadados."
+                "Inclua um título criativo, descrição, instruções claras (em lista), 5 exercícios e metadados. "
+                "IMPORTANTE: Cada exercício DEVE ter uma palavra ou frase não vazia a ser pronunciada."
             )
 
             # Try to use gpt-4o-mini first, which supports response_format parameter
@@ -640,6 +641,42 @@ class GameDesignerAgent:
                 self.logger.warning(
                     "Incomplete LLM response. Using fallback.")
                 return self._get_fallback_content(game_type, difficulty, age_group, target_sound)
+
+            # NOVO: Validar e corrigir exercícios vazios
+            if isinstance(content_json.get("exercises"), list):
+                # Obter palavras para o som alvo (para substituições, se necessário)
+                fallback_words = self._get_fallback_words_for_sound(
+                    target_sound)
+
+                # Processar cada exercício para garantir que não tenha palavras vazias
+                for i, exercise in enumerate(content_json["exercises"]):
+                    # Se não for um dicionário, substituir completamente
+                    if not isinstance(exercise, dict):
+                        self.logger.warning(
+                            f"Exercise {i} is not a dictionary. Replacing with fallback.")
+                        fallback_exercise = self._create_fallback_exercise(
+                            game_type, fallback_words[i % len(fallback_words)])
+                        content_json["exercises"][i] = fallback_exercise
+                        continue
+
+                    # Verificar se possui palavra/texto para pronunciar, dependendo do tipo de jogo
+                    word_field = self._get_word_field_for_game_type(game_type)
+
+                    if word_field not in exercise or not exercise[word_field]:
+                        self.logger.warning(
+                            f"Exercise {i} has empty {word_field}. Adding fallback word.")
+                        exercise[word_field] = fallback_words[i %
+                                                              len(fallback_words)]
+
+                    # Garantir outros campos obrigatórios para o tipo de jogo
+                    required_fields = self._get_required_fields_for_game_type(
+                        game_type)
+                    for field in required_fields:
+                        if field not in exercise or not exercise[field]:
+                            default_value = "Dica: Pronuncie com cuidado" if "tip" in field or "hint" in field else "Descrição padrão"
+                            exercise[field] = default_value
+                            self.logger.warning(
+                                f"Added default value for missing field {field} in exercise {i}")
 
             # Certificar-se de que o target_sound está no conteúdo retornado
             content_json["target_sound"] = content_json.get(
@@ -971,3 +1008,152 @@ Cada exercício deve ter: "sentence" (frase), "challenge" (desafio específico).
             self.logger.error(
                 f"Erro ao salvar template para {game_type}: {str(e)}")
             return False
+
+    def _get_word_field_for_game_type(self, game_type: str) -> str:
+        """
+        Retorna o nome do campo que contém a palavra ou frase a ser pronunciada,
+        dependendo do tipo de jogo.
+
+        Args:
+            game_type: O tipo de jogo
+
+        Returns:
+            O nome do campo que contém a palavra ou frase
+        """
+        field_mapping = {
+            "exercícios de pronúncia": "word",
+            "histórias interativas": "target_phrase",
+            "conjunto de imagens": "target_word",
+            "frases contextuais": "phrase",
+            "palavras cruzadas": "word",
+            "adivinhações": "answer",
+            "rimas": "starter",
+            "desafios de pronúncia": "sentence"
+        }
+
+        return field_mapping.get(game_type, "word")
+
+    def _get_required_fields_for_game_type(self, game_type: str) -> List[str]:
+        """
+        Retorna a lista de campos obrigatórios para um tipo de jogo.
+
+        Args:
+            game_type: O tipo de jogo
+
+        Returns:
+            Lista de nomes de campos obrigatórios
+        """
+        required_fields = {
+            "exercícios de pronúncia": ["word", "tip"],
+            "histórias interativas": ["scenario", "target_phrase", "context"],
+            "conjunto de imagens": ["image_description", "target_word", "hint"],
+            "frases contextuais": ["situation", "phrase"],
+            "palavras cruzadas": ["clue", "word"],
+            "adivinhações": ["clue", "answer"],
+            "rimas": ["starter", "rhymes"],
+            "desafios de pronúncia": ["sentence", "challenge"]
+        }
+
+        return required_fields.get(game_type, ["word", "tip"])
+
+    def _create_fallback_exercise(self, game_type: str, word: str) -> Dict[str, Any]:
+        """
+        Cria um exercício de fallback para um determinado tipo de jogo.
+
+        Args:
+            game_type: O tipo de jogo
+            word: A palavra a ser usada no exercício
+
+        Returns:
+            Um dicionário com os campos do exercício
+        """
+        if game_type == "exercícios de pronúncia":
+            return {
+                "word": word,
+                "tip": f"Pronuncie a palavra '{word}' com cuidado",
+                "difficulty": 1,
+                "image_hint": f"Imagem de {word}"
+            }
+        elif game_type == "histórias interativas":
+            return {
+                "scenario": "Em uma aventura",
+                "target_phrase": f"Eu encontrei um {word}!",
+                "context": "Você precisa contar o que encontrou",
+                "character": "explorador"
+            }
+        elif game_type == "conjunto de imagens":
+            return {
+                "image_description": f"Imagem de {word}",
+                "target_word": word,
+                "hint": "Pronuncie com clareza"
+            }
+        elif game_type == "frases contextuais":
+            return {
+                "situation": "Na escola",
+                "phrase": f"Eu gosto de {word}.",
+                "target_sounds": word[0]  # Primeiro caractere como som-alvo
+            }
+        elif game_type == "palavras cruzadas":
+            return {
+                "clue": f"Algo relacionado a {word}",
+                "word": word,
+                "position": "horizontal"
+            }
+        elif game_type == "adivinhações":
+            return {
+                "clue": f"Começa com a letra {word[0].upper()}",
+                "answer": word
+            }
+        elif game_type == "rimas":
+            return {
+                "starter": word,
+                "rhymes": ["Encontre palavras que rimam"]
+            }
+        elif game_type == "desafios de pronúncia":
+            return {
+                "sentence": f"O {word} é muito interessante.",
+                "challenge": "Pronuncie claramente"
+            }
+        else:
+            # Fallback genérico
+            return {
+                "word": word,
+                "tip": "Pronuncie com clareza"
+            }
+
+    def _get_fallback_words_for_sound(self, target_sound: str) -> List[str]:
+        """
+        Retorna uma lista de palavras de fallback para um determinado som.
+
+        Args:
+            target_sound: O som-alvo
+
+        Returns:
+            Lista de palavras que contêm o som-alvo
+        """
+        # Palavras para cada som (para uso em fallback)
+        sound_words = {
+            "p": ["pato", "pé", "pipoca", "porta", "pula"],
+            "b": ["bola", "boca", "bebê", "barco", "banana"],
+            "m": ["mão", "mesa", "meia", "mamãe", "maçã"],
+            "t": ["tatu", "tomada", "telhado", "tapete", "telefone"],
+            "d": ["dado", "dedo", "dia", "doce", "dois"],
+            "n": ["nariz", "navio", "ninho", "nome", "nuvem"],
+            "s": ["sapo", "sino", "sol", "sopa", "sapato"],
+            "z": ["zebra", "zero", "zigzag", "zoológico", "zinco"],
+            "f": ["faca", "fogo", "foto", "feijão", "festa"],
+            "v": ["vaca", "vovó", "vida", "vale", "vela"],
+            "l": ["lua", "lata", "lobo", "livro", "lápis"],
+            "r": ["rato", "rua", "rosa", "rei", "roupa"],
+            "ch": ["chuva", "chave", "chá", "chinelo", "chocolate"],
+            "j": ["janela", "jogo", "jeito", "jabuti", "joia"],
+            "lh": ["palha", "palheta", "coelho", "milho", "toalha"],
+            "nh": ["ninho", "sonho", "banho", "linha", "marinheiro"],
+            "rr": ["carro", "terra", "ferro", "serra", "erro"],
+            "x": ["xícara", "xadrez", "xerox", "peixe", "caixa"]
+        }
+
+        # Palavras padrão se o som não estiver na lista
+        default_words = ["casa", "mundo", "carinho", "pessoa", "felicidade"]
+
+        return sound_words.get(target_sound, default_words)

@@ -1,0 +1,64 @@
+{
+  "title": "Aventura da Sílaba Tônica - O Tesouro do T",
+  "description": "Neste jogo, as crianças embarcam em uma emocionante aventura para encontrar o tesouro perdido, enquanto aprendem a identificar a sílaba tônica das palavras que contém o som 't'.",
+  "instructions": [
+    "Ouça a palavra que o personagem fala.",
+    "Identifique qual é a sílaba tônica na palavra.",
+    "Escolha a opção correta que representa a sílaba tônica.",
+    "Colete estrelas ao acertar as respostas!",
+    "Tente completar todas as fases para encontrar o tesouro!"
+  ],
+  "exercises": [
+    {
+      "exercise": "Ouça a palavra 'taco'. Qual é a sílaba tônica?",
+      "options": [
+        "ta",
+        "co"
+      ],
+      "correct_answer": "ta"
+    },
+    {
+      "exercise": "Ouça a palavra 'tigre'. Qual é a sílaba tônica?",
+      "options": [
+        "ti",
+        "gre"
+      ],
+      "correct_answer": "ti"
+    },
+    {
+      "exercise": "Ouça a palavra 'tinta'. Qual é a sílaba tônica?",
+      "options": [
+        "tin",
+        "ta"
+      ],
+      "correct_answer": "tin"
+    },
+    {
+      "exercise": "Ouça a palavra 'tartaruga'. Qual é a sílaba tônica?",
+      "options": [
+        "tar",
+        "ru"
+      ],
+      "correct_answer": "tar"
+    },
+    {
+      "exercise": "Ouça a palavra 'trombeta'. Qual é a sílaba tônica?",
+      "options": [
+        "trom",
+        "be"
+      ],
+      "correct_answer": "trom"
+    }
+  ],
+  "target_skills": [
+    "Identificação da sílaba tônica",
+    "Aprimoramento da pronúncia",
+    "Aumento do vocabulário",
+    "Reconhecimento auditivo das palavras",
+    "Desenvolvimento da atenção e concentração"
+  ],
+  "target_sound": "t",
+  "estimated_duration": "10-15 minutos",
+  "theme": "Piratas e Tesouros",
+  "visual_style": "Colorido e lúdico, com ilustrações de piratas, ilhas e tesouros, para atrair a atenção das crianças."
+}
