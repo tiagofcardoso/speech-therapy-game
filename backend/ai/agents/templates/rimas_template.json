@@ -1,0 +1,74 @@
+{
+  "title": "Jogo das Rimas do J",
+  "description": "Este jogo desafia as crianças a encontrar e pronunciar palavras que rimam com o som 'j', ajudando a desenvolver a sua articulação e vocabulário através de combinações de sons complexos.",
+  "instructions": [
+    "Escute a palavra ou frase inicial.",
+    "Tente repetir a palavra claramente.",
+    "Procure palavras que rimem com a palavra inicial.",
+    "Diga as palavras que você encontrou em voz alta.",
+    "Divirta-se criando novas combinações de frases com as palavras que rima!"
+  ],
+  "exercises": [
+    {
+      "starter": "Laranja",
+      "rhymes": [
+        "barriga",
+        "ferrugem",
+        "navega",
+        "franginha",
+        "estratagema"
+      ]
+    },
+    {
+      "starter": "Jogada",
+      "rhymes": [
+        "pescada",
+        "bocada",
+        "tremida",
+        "caminhada",
+        "encaminhada"
+      ]
+    },
+    {
+      "starter": "Mágica",
+      "rhymes": [
+        "trágica",
+        "lógica",
+        "prática",
+        "sátira",
+        "tática"
+      ]
+    },
+    {
+      "starter": "Jardim",
+      "rhymes": [
+        "palpite enfim",
+        "razão e fim",
+        "caminho assim",
+        "colher de lã",
+        "aguardente de linho"
+      ]
+    },
+    {
+      "starter": "Joia",
+      "rhymes": [
+        "boia",
+        "coisa",
+        "prosa",
+        "improvisada",
+        "poesia"
+      ]
+    }
+  ],
+  "target_skills": [
+    "Articulação do som 'j'",
+    "Aprimoramento do vocabulário",
+    "Reconhecimento auditivo de rimas",
+    "Formação de frases completas",
+    "Criação de combinações linguísticas"
+  ],
+  "target_sound": "j",
+  "estimated_duration": "10-15 minutos",
+  "theme": "escolar",
+  "visual_style": "colorido"
+}

@@ -1,0 +1,49 @@
+{
+  "title": "Aventuras do Som 'X'",
+  "description": "Neste jogo emocionante, as crianças irão explorar um mundo cheio de imagens e palavras que contêm o som 'x'. O objetivo é ajudar as crianças a pronunciar corretamente palavras desafiadoras e a melhorar suas habilidades de comunicação.",
+  "instructions": [
+    "Observe a imagem apresentada.",
+    "Leia a palavra que a imagem representa em voz alta.",
+    "Use as dicas fornecidas para pronunciar corretamente.",
+    "Repita a palavra ou frase até que você se sinta confiante.",
+    "Tente usar a palavra em uma frase."
+  ],
+  "exercises": [
+    {
+      "image_description": "Uma caixa colorida com brinquedos dentro.",
+      "target_word": "caixa",
+      "hint": "A palavra começa com o som de 'c' seguido por 'ai' e termina com 'xa'."
+    },
+    {
+      "image_description": "Um ônibus escolar em movimento.",
+      "target_word": "ônibus-express",
+      "hint": "Comece com 'ô', depois 'ni', em seguida 'bus', e termine com 'express' como se estivesse em alta velocidade."
+    },
+    {
+      "image_description": "Uma figura de um lobo se escondendo atrás de uma árvore.",
+      "target_word": "xaxim",
+      "hint": "A palavra começa com o som de 'x' e termina com o som 'im', como 'xim' em uma brincadeira."
+    },
+    {
+      "image_description": "Um astronauta no espaço próximo a estrelas.",
+      "target_word": "exploração",
+      "hint": "A palavra começa com 'ex', seguido de 'plo', depois 'ra' e termina com 'ção'."
+    },
+    {
+      "image_description": "Um xilofone colorido tocando música.",
+      "target_word": "xilofone",
+      "hint": "Comece com o som de 'xi', seguido por 'lo' e termine com 'fone' como se fosse um instrumento musical."
+    }
+  ],
+  "target_skills": [
+    "Pronúncia correta de palavras complexas",
+    "Aumento do vocabulário com palavras que contêm 'x'",
+    "Formação de frases completas",
+    "Capacidade de descrever imagens em palavras",
+    "Desenvolvimento da confiança ao falar"
+  ],
+  "target_sound": "x",
+  "estimated_duration": "10-15 minutos",
+  "theme": "educacional",
+  "visual_style": "colorido"
+}

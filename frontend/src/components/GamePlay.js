@@ -321,82 +321,126 @@ const GamePlay = () => {
     };
 
     const evaluatePronunciation = async (audioBlob, expectedWord) => {
-        if (!expectedWord || expectedWord.trim() === '') {
-            console.error("Missing expected word for pronunciation evaluation");
-            // Return a default response for empty words
+        // Verifica se expectedWord é uma string válida e não vazia
+        if (!expectedWord || typeof expectedWord !== 'string' || expectedWord.trim() === '') {
+            console.error("evaluatePronunciation: Palavra esperada inválida ou vazia recebida:", expectedWord);
             return {
-                success: true,
+                success: true, // A função em si não falhou, mas a entrada era inválida
                 isCorrect: false,
                 score: 0,
                 recognized_text: "",
-                feedback: "Não foi possível avaliar a pronúncia: palavra não definida.",
+                feedback: "Não foi possível avaliar: palavra esperada inválida.",
                 audio_feedback: null
             };
         }
 
         const formData = new FormData();
-        formData.append('audio', audioBlob);
+        // Adiciona o nome do arquivo ao blob para compatibilidade
+        formData.append('audio', audioBlob, 'pronunciation.webm');
         formData.append('expected_word', expectedWord);
+
+        // IMPORTANTE: Adicionar o sessionId se o backend /api/evaluate-pronunciation precisar dele
+        if (sessionId) {
+            formData.append('session_id', sessionId);
+        } else {
+            // Se sessionId for essencial, talvez retornar um erro aqui?
+            console.warn("evaluatePronunciation: sessionId está faltando na requisição!");
+        }
 
         try {
             const response = await api.post('/api/evaluate-pronunciation', formData);
+            console.log("evaluatePronunciation API response data:", response.data);
             return response.data;
         } catch (error) {
-            console.error("Pronunciation evaluation error:", error);
-            throw error;
+            console.error("Pronunciation evaluation API error:", error);
+            const errorMsg = error.response?.data?.message || error.message || "Erro desconhecido na API";
+            // Retorna um objeto de erro consistente
+            return {
+                success: false, // Indica que a chamada API falhou
+                isCorrect: false,
+                score: 0,
+                recognized_text: "",
+                feedback: `Erro na avaliação: ${errorMsg}`,
+                audio_feedback: null
+            };
         }
     };
 
     const evaluateResponse = async (audioBlob) => {
         try {
-            const currentExercise = getCurrentExercise();
-            if (!currentExercise) {
-                console.error("No current exercise found");
-                setError("Erro: Não foi possível encontrar o exercício atual");
-                return;
+            const currentExercise = getCurrentExercise(); // Chama a função com logs
+
+            // **** VERIFICAÇÃO CRÍTICA ****
+            // Verifica se currentExercise existe E se a propriedade 'word' existe e não é nula/undefined
+            if (!currentExercise || typeof currentExercise.word === 'undefined' || currentExercise.word === null || currentExercise.word.trim() === '') {
+                console.error("evaluateResponse: Não é possível avaliar. 'currentExercise' ou 'currentExercise.word' está faltando ou é inválido.", { currentExercise });
+                // Define um feedback de erro claro para o usuário
+                setFeedback({
+                    correct: false,
+                    message: "Erro interno: Não foi possível encontrar a palavra para este exercício. Tente recarregar.",
+                    recognizedText: ""
+                });
+                setMascotMood('sad');
+                setMascotMessage("Oops! Algo deu errado ao carregar este exercício.");
+                return; // Interrompe a avaliação
             }
+            // **** FIM DA VERIFICAÇÃO CRÍTICA ****
 
-            console.log("Sending evaluation for word:", currentExercise.word);
+            // Se passou na verificação, podemos usar currentExercise.word com segurança
+            const expectedWord = currentExercise.word;
 
-            // Montrer la mascotte en train de réfléchir pendant l'évaluation
+            console.log("Sending evaluation for word:", expectedWord); // Loga a palavra que será enviada
+
             setMascotMood('thinking');
             setMascotMessage("Estou a avaliar a tua pronúncia...");
 
-            // Enviar para o backend para avaliação
-            const response = await evaluatePronunciation(audioBlob, currentExercise.word);
+            // Chama a função de avaliação passando a palavra confirmada
+            const response = await evaluatePronunciation(audioBlob, expectedWord);
 
             console.log("Evaluation response:", response);
 
-            const { isCorrect, score, feedback, audio_feedback, recognized_text } = response;
+            const { isCorrect, score: evalScore, feedback: evalFeedback, audio_feedback, recognized_text } = response;
 
             setFeedback({
                 correct: isCorrect,
-                message: feedback || (isCorrect
-                    ? "Muito bem! A tua pronúncia está correta."
-                    : "Tenta novamente. Presta atenção na pronúncia."),
-                recognizedText: recognized_text || "Texto não reconhecido"
+                message: evalFeedback || (isCorrect ? "Muito bem!" : "Tenta novamente."),
+                recognizedText: recognized_text || "Não reconhecido"
             });
-
-            // Armazenar o áudio de feedback para reprodução
             setFeedbackAudio(audio_feedback);
 
-            // Mettre à jour l'humeur de la mascotte en fonction du résultat
             if (isCorrect) {
-                setScore(prev => prev + score);
+                setScore(prev => prev + (evalScore || 0));
                 setMascotMood('happy');
-                setMascotMessage("Muito bem! Continua assim!");
+                setMascotMessage("Excelente!");
             } else {
                 setMascotMood('sad');
-                setMascotMessage("Quase lá! Tenta de novo, tu consegues!");
+                setMascotMessage("Quase lá!");
             }
+
         } catch (err) {
             console.error("Erro ao avaliar pronúncia:", err);
             setError("Erro ao avaliar sua resposta: " + (err.response?.data?.message || err.message));
-
-            // Mettre à jour la mascotte en cas d'erreur
             setMascotMood('sad');
             setMascotMessage("Ocorreu um erro. Vamos tentar de novo?");
         }
+    };
+
+    const getCurrentExercise = () => {
+        // Verifica se 'game', 'game.content' e o índice são válidos
+        if (!game || !game.content || !Array.isArray(game.content) || game.content.length === 0) {
+            console.warn("getCurrentExercise: Dados do jogo (game.content) ainda não disponíveis ou inválidos.", { game });
+            return null; // Retorna null se os dados não estiverem prontos
+        }
+        if (currentExerciseIndex < 0 || currentExerciseIndex >= game.content.length) {
+            console.warn(`getCurrentExercise: Índice inválido (${currentExerciseIndex}) para o tamanho do conteúdo (${game.content.length}).`);
+            return null; // Retorna null se o índice for inválido
+        }
+
+        // Loga o exercício específico que será retornado
+        const exercise = game.content[currentExerciseIndex];
+        // Log importante para ver a estrutura real do exercício
+        console.log(`getCurrentExercise: Retornando exercício no índice ${currentExerciseIndex}:`, JSON.stringify(exercise));
+        return exercise;
     };
 
     const moveToNextExercise = () => {
@@ -434,11 +478,6 @@ const GamePlay = () => {
                     setGameComplete(true);
                 });
         }
-    };
-
-    const getCurrentExercise = () => {
-        if (!game || !game.content || game.content.length === 0) return null;
-        return game.content[currentExerciseIndex];
     };
 
     const returnToDashboard = () => {

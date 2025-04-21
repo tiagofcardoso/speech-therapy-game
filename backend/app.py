@@ -422,12 +422,11 @@ def update_user_profile(user_id, requesting_user_id):
 @app.route('/api/start_game', methods=['POST'])
 @token_required
 def start_game(user_id):
+    global mcp_coordinator, db  # Garantir acesso
     try:
-        # Log detalhado para depuração
-        print(f"========== INICIANDO SESSÃO DE JOGO ==========")
+        print(f"========== INICIANDO SESSÃO DE JOGO (Rota -> Coordenador) ==========")
         print(f"User ID: {user_id}")
 
-        # Obter dados da requisição
         data = request.json
         game_id = data.get('game_id')
         difficulty = data.get('difficulty', 'iniciante')
@@ -437,206 +436,75 @@ def start_game(user_id):
         print(
             f"Dados recebidos: game_id={game_id}, título={title}, dificuldade={difficulty}")
 
-        # Verificar se o usuário existe - buscar com tratamento de ObjectId
-        user = db.get_user_by_id(user_id)
+        # Verificar se o coordenador está inicializado
+        if not mcp_coordinator:
+            print("❌ Error: MCP Coordinator not initialized!")
+            return jsonify({"success": False, "message": "Erro interno: Coordenador não disponível"}), 500
 
+        # Buscar perfil do usuário (necessário para ambos os casos)
+        user = db.get_user_by_id(user_id)
         if not user:
+            # Considerar tratamento de erro mais robusto se usuário não for encontrado
             print(f"⚠️ Usuário não encontrado: {user_id}")
-            # Criar um usuário básico para não bloquear o fluxo (apenas em desenvolvimento)
-            if app.config.get('DEBUG', False):
-                print("Modo DEBUG: Criando usuário temporário para continuar o fluxo")
-                temp_user_id = db.save_user({
-                    "_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id,
-                    "name": "Usuário Temporário",
-                    "username": f"temp_{user_id}",
-                    "created_at": datetime.datetime.now(),
-                    "history": {}
-                })
-                user = db.get_user_by_id(temp_user_id)
-                print(f"Usuário temporário criado: {temp_user_id}")
-            else:
-                return jsonify({"error": "Usuário não encontrado"}), 404
+            return jsonify({"error": "Usuário não encontrado"}), 404
 
         user_profile = {
             "name": user.get('name', 'Amigo'),
             "age": user.get('age', 6),
             "history": user.get('history', {})
         }
+        print(f"Perfil do usuário obtido: {user_profile.get('name')}")
 
-        print(f"Perfil do usuário: {user_profile}")
-
-        # Inicializar a sessão
-        session_data = {}
-
-        # Se um game_id for fornecido, tentar buscar o jogo na base de dados
+        session_result = None
         if game_id:
-            try:
-                game_data = db.get_game(game_id)
-                print(
-                    f"Jogo encontrado: {game_data.get('title') if game_data else 'Não encontrado'}")
-
-                if game_data:
-                    # Usar o jogo existente para criar a sessão em vez de gerar um novo
-                    print("Utilizando jogo existente para esta sessão")
-
-                    # Preparar exercícios a partir do conteúdo do jogo
-                    exercises = []
-
-                    # Verificar diferentes possíveis localizações para os exercícios
-                    content = game_data.get("content", {})
-                    if isinstance(content, dict) and "exercises" in content:
-                        raw_exercises = content.get("exercises", [])
-                    elif isinstance(content, dict) and "content" in content:
-                        raw_exercises = content.get("content", [])
-                    elif "exercises" in game_data:
-                        raw_exercises = game_data.get("exercises", [])
-                    elif "content" in game_data and isinstance(game_data.get("content"), list):
-                        raw_exercises = game_data.get("content", [])
-                    elif isinstance(content, list):
-                        raw_exercises = content
-                    else:
-                        raw_exercises = []
-
-                    # Verificar se temos exercícios válidos
-                    if not raw_exercises:
-                        print(
-                            "⚠️ Nenhum exercício encontrado no jogo. Criando exercícios padrão.")
-                        # Criar exercícios padrão com base no título ou tipo de jogo
-                        raw_exercises = [
-                            {
-                                "word": "teste",
-                                "prompt": "Pronuncie esta palavra",
-                                "hint": "Fale devagar",
-                                "visual_cue": "teste"
-                            },
-                            {
-                                "word": "jogo",
-                                "prompt": "Diga esta palavra",
-                                "hint": "Fale com clareza",
-                                "visual_cue": "jogo"
-                            }
-                        ]
-
-                    # Transformar os exercícios para o formato esperado pela sessão
-                    for idx, exercise in enumerate(raw_exercises):
-                        if not isinstance(exercise, dict):
-                            continue
-
-                        # Obter a palavra do exercício, garantindo que não seja vazia
-                        word = exercise.get("word", exercise.get(
-                            "text", exercise.get("answer", "")))
-                        # Se a palavra for vazia, usar uma palavra padrão com base no índice
-                        if not word:
-                            word = f"palavra{idx+1}"
-                            print(
-                                f"⚠️ Palavra vazia detectada no exercício {idx}, usando '{word}' como fallback")
-
-                        transformed_exercise = {
-                            "word": word,
-                            "prompt": exercise.get("prompt", exercise.get("tip", "Pronuncie esta palavra")),
-                            "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
-                            "visual_cue": exercise.get("visual_cue", word)
-                        }
-                        exercises.append(transformed_exercise)
-
-                    # Verificar se conseguimos processar ao menos um exercício
-                    if not exercises:
-                        print(
-                            "⚠️ Falha ao processar exercícios. Criando exercício padrão.")
-                        exercises = [
-                            {
-                                "word": "teste",
-                                "prompt": "Pronuncie esta palavra",
-                                "hint": "Fale devagar",
-                                "visual_cue": "teste"
-                            }
-                        ]
-
-                    # Criar sessão a partir do jogo existente
-                    session_data = {
-                        "session_id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "game_id": game_id,
-                        "game_title": game_data.get("title", title),
-                        "difficulty": game_data.get("difficulty", difficulty),
-                        "game_type": game_data.get("game_type", game_type),
-                        "exercises": exercises,
-                        "instructions": game_data.get("instructions", ["Bem-vindo ao jogo de pronúncia!"]),
-                        "current_index": 0,
-                        "responses": [],
-                        "completed": False,
-                        "start_time": datetime.datetime.now().isoformat(),
-                        "end_time": None
-                    }
-            except Exception as e:
-                print(f"Erro ao buscar jogo {game_id}: {str(e)}")
-                traceback.print_exc()
-                # Continuar mesmo se o jogo não for encontrado
-
-        # Se a sessão não foi criada a partir de um jogo existente, criar uma nova com o MCP
-        if not session_data:
-            print("Criando nova sessão de jogo via MCP coordinator")
-            session_data = mcp_coordinator.create_game_session(
-                user_id, user_profile)
-
-            # Associar a sessão com o jogo que está sendo jogado se um ID foi fornecido
-            if game_id:
-                session_data["game_id"] = game_id
-                session_data["game_title"] = title
-                session_data["game_type"] = game_type
-
-        # Adicionar ID de sessão para rastreamento se ainda não existir
-        if "session_id" not in session_data:
-            session_data["session_id"] = str(uuid.uuid4())
-
-        # Adicionar timestamps
-        session_data["created_at"] = datetime.datetime.now().isoformat()
-        session_data["user_id"] = user_id
-
-        # Salvar sessão no banco de dados
-        session_id = db.save_session(session_data)
-        print(f"Sessão criada com ID: {session_id}")
-
-        # Obter primeiro exercício
-        if "exercises" in session_data and len(session_data["exercises"]) > 0:
-            current_exercise = session_data["exercises"][0]
-            # Verificação adicional para garantir que o primeiro exercício tenha uma palavra válida
-            if not current_exercise.get("word"):
-                current_exercise["word"] = "palavra1"
-                print("⚠️ Primeira palavra vazia, substituída por 'palavra1'")
+            # Carregar sessão de jogo existente
+            print(
+                f"Chamando coordenador para carregar jogo existente: {game_id}")
+            session_result = mcp_coordinator.load_existing_game_session(
+                user_id, game_id, user_profile)
         else:
-            print("⚠️ Nenhum exercício encontrado na sessão. Criando exercício padrão.")
-            # Criar um exercício padrão se não houver exercícios na sessão
-            current_exercise = {
-                "word": "teste",
-                "prompt": "Pronuncie esta palavra",
-                "hint": "Fale devagar",
-                "visual_cue": "Uma imagem apareceria aqui"
-            }
-            session_data["exercises"] = [current_exercise]
+            # Criar nova sessão de jogo
+            print("Chamando coordenador para criar nova sessão de jogo")
+            session_result = mcp_coordinator.create_new_game_session(
+                user_id, user_profile, difficulty, title, game_type)
 
-        # Criar resposta com instruções de boas-vindas e primeiro exercício
+        # Verificar se a criação/carregamento da sessão foi bem-sucedida
+        if not session_result or not session_result.get("success"):
+            print(
+                f"❌ Falha ao iniciar sessão via coordenador: {session_result.get('message')}")
+            return jsonify({"error": session_result.get("message", "Falha ao iniciar sessão")}), 500
+
+        # Preparar a resposta para o frontend
+        exercises = session_result.get("exercises", [])
+        if not exercises:
+            print("⚠️ Coordenador retornou lista de exercícios vazia!")
+            # Adicionar um exercício padrão para evitar erro no frontend
+            exercises = [
+                {"word": "erro", "prompt": "Exercício não carregado", "hint": "", "visual_cue": "erro"}]
+
+        # Pega o primeiro exercício retornado
+        current_exercise_data = exercises[0]
+
         response = {
-            "session_id": session_data["session_id"],
-            "instructions": session_data.get("instructions", ["Bem-vindo ao jogo de pronúncia!"]),
+            "session_id": session_result["session_id"],
+            "instructions": session_result.get("instructions", ["Bem-vindo!"]),
             "current_exercise": {
-                # Garantir palavra padrão
-                "word": current_exercise.get("word", "teste"),
-                "prompt": current_exercise.get("prompt", "Pronuncie esta palavra"),
-                "hint": current_exercise.get("hint", "Fale devagar"),
-                "visual_cue": current_exercise.get("visual_cue", current_exercise.get("word", "teste")),
-                "index": 0,
-                "total": len(session_data.get("exercises", []))
+                "word": current_exercise_data.get("word", "teste"),
+                "prompt": current_exercise_data.get("prompt", "Pronuncie"),
+                "hint": current_exercise_data.get("hint", ""),
+                "visual_cue": current_exercise_data.get("visual_cue", current_exercise_data.get("word", "teste")),
+                "index": 0,  # Sempre começa no índice 0
+                "total": len(exercises)  # Total de exercícios na sessão
             }
         }
 
-        print(f"Resposta preparada: {response}")
-        print("========== SESSÃO DE JOGO INICIADA COM SUCESSO ==========")
-
+        print(
+            f"Resposta preparada: {response['session_id']}, Exercícios: {len(exercises)}")
+        print("========== SESSÃO DE JOGO INICIADA COM SUCESSO (Via Coordenador) ==========")
         return jsonify(response), 200
+
     except Exception as e:
-        print(f"❌ Erro ao iniciar jogo: {str(e)}")
-        import traceback
+        print(f"❌ Erro na rota /api/start_game: {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"Falha ao iniciar jogo: {str(e)}"}), 500
 
@@ -1108,226 +976,60 @@ def get_game_endpoint(game_id):
         }), 500
 
 
-@app.route('/api/game/finish', methods=['OPTIONS'])
-def options_game_finish():
-    """Endpoint para lidar com requisições OPTIONS para CORS"""
-    response = jsonify({'status': 'ok'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers',
-                         'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    return response
-
-
 @app.route('/api/game/finish', methods=['POST'])
 @token_required
 def finish_game(user_id):
     """
-    Finaliza um jogo e atualiza o status no banco de dados
+    Finaliza um jogo chamando o MCP Coordinator.
     """
+    global mcp_coordinator  # Garantir acesso ao coordenador
     try:
-        # Log detalhado para depuração
-        print(f"========== FINALIZANDO JOGO ==========")
-
-        # Extrair dados do request
+        print(f"========== FINALIZANDO JOGO (Rota -> Coordenador) ==========")
         data = request.json
         session_id = data.get('session_id')
-        completed_manually = data.get('completed_manually', False)
+        final_score = data.get('final_score', 0)  # Usar final_score
         completion_option = data.get('completion_option', 'finish')
-        final_score = data.get('final_score', 0)
+        completed_manually = data.get('completed_manually', False)
         generate_next = data.get('generate_next', False)
 
         print(
-            f"Dados recebidos: session_id={session_id}, score={final_score}, option={completion_option}")
+            f"Dados recebidos: session_id={session_id}, score={final_score}, option={completion_option}, generate_next={generate_next}")
 
         if not session_id:
-            print("❌ Erro: ID da sessão não fornecido")
-            return jsonify({
-                "success": False,
-                "message": "ID da sessão não fornecido"
-            }), 400
+            return jsonify({"success": False, "message": "ID da sessão não fornecido"}), 400
 
-        # Buscar a sessão no banco de dados
-        session = db.get_session(session_id)
-        print(f"Sessão encontrada: {session is not None}")
+        # Verificar se o coordenador está inicializado
+        if not mcp_coordinator:
+            print("❌ Error: MCP Coordinator not initialized!")
+            return jsonify({"success": False, "message": "Erro interno: Coordenador não disponível"}), 500
 
-        if not session:
-            print(f"❌ Erro: Sessão não encontrada com ID: {session_id}")
-            return jsonify({
-                "success": False,
-                "message": "Sessão não encontrada"
-            }), 404
+        # Chamar o coordenador para finalizar
+        result = mcp_coordinator.finalize_session(
+            session_id=session_id,
+            user_id=user_id,
+            final_score=final_score,  # Passar final_score
+            completion_option=completion_option,
+            completed_manually=completed_manually,
+            generate_next=generate_next
+        )
 
-        # Verificar se o usuário tem permissão para finalizar esta sessão
-        session_user_id = session.get('user_id')
-        print(
-            f"User ID da sessão: {session_user_id}, User ID autenticado: {user_id}")
-
-        if str(session_user_id) != str(user_id):
+        status_code = 200 if result.get("success") else 500
+        if not result.get("success"):
             print(
-                f"❌ Erro: Usuário {user_id} não tem permissão para finalizar a sessão de {session_user_id}")
-            return jsonify({
-                "success": False,
-                "message": "Você não tem permissão para finalizar esta sessão"
-            }), 403
+                f"❌ Falha ao finalizar jogo via coordenador: {result.get('message')}")
 
-        # Capturar o game_id da sessão para atualizar o jogo
-        game_id = session.get('game_id')
-        print(f"Game ID associado à sessão: {game_id}")
-
-        # Atualizar os dados da sessão com os valores enviados pelo frontend
-        update_data = {
-            'completed': True,
-            'end_time': datetime.datetime.now().isoformat(),
-            'completed_manually': completed_manually,
-            'completion_option': completion_option,
-            'final_score': final_score,
-            'exercises_completed': len(session.get('exercises', [])) if 'exercises' in session else 0
-        }
-
-        print(f"Atualizando sessão com dados: {update_data}")
-
-        # Atualizar a sessão no banco de dados
-        success = db.update_session(session_id, update_data)
-        print(f"Atualização da sessão: {'Sucesso' if success else 'Falha'}")
-
-        # Se o jogo foi identificado, também atualize seu status para 'completed'
-        if game_id:
-            try:
-                print(f"Atualizando status do jogo {game_id} para 'completed'")
-                # Atualizar o jogo no banco de dados
-                game_update_result = db.update_game(game_id, {
-                    'completed': True,
-                    'completed_at': datetime.datetime.now().isoformat(),
-                    'final_score': final_score
-                })
-                print(
-                    f"Atualização do jogo: {'Sucesso' if game_update_result else 'Falha'}")
-            except Exception as game_err:
-                print(f"❌ Erro ao atualizar jogo: {str(game_err)}")
-                # Não bloquear o fluxo se houver erro na atualização do jogo
-
-        if not success:
-            print("❌ Erro: Falha ao atualizar a sessão no banco de dados")
-            return jsonify({
-                "success": False,
-                "message": "Falha ao atualizar a sessão"
-            }), 500
-
-        # Atualizar as estatísticas do usuário
-        user = db.get_user_by_id(user_id)
-        if user:
-            print(
-                f"Atualizando estatísticas do usuário: {user.get('name', 'Unknown')}")
-
-            # Determinar o número de exercícios concluídos
-            if 'exercises' in session:
-                exercises_completed = len(session['exercises'])
-            else:
-                exercises_completed = update_data.get('exercises_completed', 0)
-
-            # Atualizar contador total de exercícios
-            current_exercises = user.get(
-                'statistics', {}).get('exercises_completed', 0)
-
-            # Calcular nova precisão média
-            current_accuracy = user.get('statistics', {}).get('accuracy', 0)
-            completed_sessions_count = len(
-                user.get('history', {}).get('completed_sessions', [])) + 1
-
-            # Evitar divisão por zero
-            if completed_sessions_count > 0:
-                new_accuracy = ((current_accuracy * (completed_sessions_count - 1)
-                                 ) + final_score) / completed_sessions_count
-            else:
-                new_accuracy = final_score
-
-            # Preparar dados de atualização
-            user_updates = {
-                'statistics.exercises_completed': current_exercises + exercises_completed,
-                'statistics.last_activity': datetime.datetime.now().isoformat(),
-                'statistics.accuracy': round(new_accuracy, 2)
-            }
-
-            # Adicionar resumo da sessão ao histórico
-            session_summary = {
-                'session_id': session_id,
-                'completed_at': datetime.datetime.now().isoformat(),
-                'difficulty': session.get('difficulty', 'iniciante'),
-                'score': final_score,
-                'exercises_completed': exercises_completed,
-                'game_id': game_id,
-                'game_title': session.get('game_title', 'Jogo sem título')
-            }
-
-            # Atualizar dados do usuário no banco de dados
-            try:
-                db.update_user(user_id, user_updates)
-
-                # Adicionar sessão ao histórico
-                history_update = db.add_to_user_history(
-                    user_id, session_summary)
-                print(
-                    f"Atualização do histórico: {'Sucesso' if history_update else 'Falha'}")
-            except Exception as user_err:
-                print(
-                    f"❌ Erro ao atualizar estatísticas do usuário: {str(user_err)}")
-                # Continuar mesmo se houver erro na atualização do usuário
-
-        # Se solicitado, gerar um novo jogo
-        next_game = None
-        if generate_next:
-            try:
-                # Usar a mesma dificuldade do jogo atual ou um nível acima dependendo da pontuação
-                current_difficulty = session.get('difficulty', 'iniciante')
-                difficulty_map = {
-                    'iniciante': 'médio' if final_score > 90 else 'iniciante',
-                    'médio': 'avançado' if final_score > 90 else 'médio',
-                    'avançado': 'avançado'
-                }
-                next_difficulty = difficulty_map.get(
-                    current_difficulty, 'iniciante')
-
-                # Gerar próximo jogo usando Gigi
-                next_game_data = game_generator.create_game(
-                    user_id=user_id,
-                    difficulty=next_difficulty,
-                    game_type="exercícios de pronúncia"
-                )
-
-                # Processar e salvar o próximo jogo
-                if next_game_data:
-                    next_game_id = db.store_game(user_id, next_game_data)
-                    next_game = {
-                        "game_id": str(next_game_id),
-                        "title": next_game_data.get("title", "Próximo Jogo"),
-                        "difficulty": next_difficulty
-                    }
-            except Exception as next_game_err:
-                print(f"❌ Erro ao gerar próximo jogo: {str(next_game_err)}")
-                # Continuar mesmo sem gerar o próximo jogo
-
-        response_data = {
-            "success": True,
-            "message": "Jogo finalizado com sucesso",
-            "final_score": final_score
-        }
-
-        # Adicionar o próximo jogo à resposta se foi gerado
-        if next_game:
-            response_data["next_game"] = next_game
-
-        print("========== JOGO FINALIZADO COM SUCESSO ==========")
-        return jsonify(response_data)
+        print(f"========== FINALIZAÇÃO PROCESSADA (Retorno Coordenador) ==========")
+        return jsonify(result), status_code
 
     except Exception as e:
-        print(f"❌ Erro ao finalizar jogo: {str(e)}")
+        print(f"❌ Erro na rota /api/game/finish: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": f"Erro interno ao finalizar o jogo: {str(e)}"
+            "message": f"Erro interno na rota de finalização: {str(e)}"
         }), 500
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001, host='0.0.0.0')
+    port = int(os.environ.get('PORT', 5001))
+    app.run(debug=DEBUG, port=port, host='0.0.0.0')
