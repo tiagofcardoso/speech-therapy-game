@@ -8,6 +8,10 @@ import datetime
 import json
 import sys
 from pathlib import Path
+import time
+import tempfile
+import subprocess
+import traceback
 
 # Add project root to Python path
 if __name__ == "__main__":
@@ -20,6 +24,8 @@ from ai.agents.game_designer_agent import GameDesignerAgent
 from ai.agents.progression_manager_agent import ProgressionManagerAgent
 from ai.agents.tutor_agent import TutorAgent
 from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
+from speech.recognition import recognize_speech
+from speech.synthesis import synthesize_speech
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -41,7 +47,7 @@ class MCPCoordinator:
         self.game_designer = GameDesignerAgent()
         self.progression_manager = ProgressionManagerAgent()
         self.tutor = TutorAgent(self.game_designer)
-        self.speech_evaluator = SpeechEvaluatorAgent()
+        self.speech_evaluator = SpeechEvaluatorAgent(self.client)
 
         self.agents = {
             "game_designer": self.game_designer,
@@ -77,7 +83,8 @@ class MCPCoordinator:
             difficulty = self.agents["progression_manager"].determine_difficulty(
                 user_profile)
             game = self.agents["game_designer"].create_game(
-                user_id, difficulty, db_connector=self.db_connector)  # Passando o db_connector para uso no histórico
+                # Passando o db_connector para uso no histórico
+                user_id, difficulty, db_connector=self.db_connector)
             instructions = self.agents["tutor"].create_instructions(
                 user_profile, difficulty)
 
@@ -118,7 +125,6 @@ class MCPCoordinator:
                 # Sintetizar áudio para o feedback, se necessário
                 if self.tutor.voice_enabled:
                     try:
-                        from backend.speech.synthesis import synthesize_speech
                         no_recognition_feedback["audio"] = synthesize_speech(
                             no_recognition_feedback["praise"])
                     except Exception as e:
@@ -228,6 +234,194 @@ class MCPCoordinator:
         except Exception as e:
             self.logger.error(f"Error processing response: {str(e)}")
             return {"error": "Failed to process response"}
+
+    def evaluate_pronunciation(self, user_id, audio_file_storage, expected_word):
+        """
+        Avalia a pronúncia de uma palavra a partir de um arquivo de áudio.
+        Encapsula a lógica de salvamento, conversão, reconhecimento e avaliação.
+        """
+        temp_path = None
+        wav_path = None
+        audio_path_for_recognition = None  # Inicializar
+        try:
+            # 1. Salvar arquivo de áudio temporariamente
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm", prefix=f"pronunciation_{user_id}_") as temp_webm:
+                audio_file_storage.save(temp_webm.name)
+                temp_path = temp_webm.name
+            self.logger.info(
+                f"✓ Audio saved to temporary path: {temp_path}")  # Usar logger
+
+            # 2. Converter WebM para WAV usando ffmpeg
+            try:
+                wav_path = temp_path.replace(".webm", ".wav")
+                self.logger.info(
+                    # Log antes
+                    f"Attempting conversion: {temp_path} -> {wav_path}")
+                result = subprocess.run([
+                    'ffmpeg', '-y', '-i', temp_path,
+                    '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', wav_path
+                ], capture_output=True, text=True, check=True)
+                # Log detalhado do ffmpeg
+                self.logger.info(
+                    f"✓ FFmpeg conversion successful. Output:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+                audio_path_for_recognition = wav_path
+
+                # *** NOVO: Verificar se o arquivo WAV existe e tem tamanho > 0 ***
+                if os.path.exists(audio_path_for_recognition):
+                    file_size = os.path.getsize(audio_path_for_recognition)
+                    self.logger.info(
+                        f"✓ WAV file exists: {audio_path_for_recognition}, Size: {file_size} bytes")
+                    if file_size == 0:
+                        self.logger.warning(
+                            f"⚠️ WAV file is empty! Path: {audio_path_for_recognition}")
+                        # Considerar tratar como erro ou usar o original
+                        # Fallback para o original se o WAV estiver vazio
+                        audio_path_for_recognition = temp_path
+                        self.logger.info(
+                            f"Falling back to original file: {audio_path_for_recognition}")
+                else:
+                    self.logger.error(
+                        f"❌ WAV file does NOT exist after conversion! Path: {audio_path_for_recognition}")
+                    audio_path_for_recognition = temp_path  # Fallback para o original
+                    self.logger.info(
+                        f"Falling back to original file: {audio_path_for_recognition}")
+
+            except subprocess.CalledProcessError as e:
+                self.logger.warning(
+                    f"⚠️ FFmpeg conversion error (Code: {e.returncode}): {e.stderr}. Using original file.")
+                audio_path_for_recognition = temp_path
+            except Exception as e:
+                self.logger.warning(
+                    f"⚠️ Audio conversion error: {str(e)}. Using original file.")
+                audio_path_for_recognition = temp_path
+
+            # Garantir que temos um caminho para tentar o reconhecimento
+            if not audio_path_for_recognition:
+                self.logger.error(
+                    "❌ No valid audio path available for recognition after save/convert attempts.")
+                raise ValueError(
+                    "Failed to prepare audio file for recognition")
+
+            # 3. Tentar reconhecimento de fala
+            recognized_text = None  # Inicializar
+            self.logger.info(
+                f"Attempting speech recognition on: {audio_path_for_recognition}")
+            try:
+                # *** NOVO: Log extra antes da chamada ***
+                self.logger.info(
+                    f"Calling recognize_speech with path='{audio_path_for_recognition}', expected='{expected_word}'")
+                recognized_text = recognize_speech(
+                    audio_path_for_recognition, expected_word)
+                # *** NOVO: Log do resultado bruto ***
+                self.logger.info(
+                    f"✓ Raw recognition result: '{recognized_text}'")
+
+            except Exception as e:
+                # *** NOVO: Capturar exceções específicas do reconhecimento ***
+                self.logger.error(
+                    f"❌ Exception during recognize_speech call: {str(e)}")
+                # Log completo do stack trace
+                self.logger.error(traceback.format_exc())
+                recognized_text = None  # Garantir que é None em caso de exceção
+
+            # 4. Lidar com falha no reconhecimento (incluindo exceções ou resultado vazio/padrão)
+            # *** MODIFICADO: Checar explicitamente por None também ***
+            if recognized_text is None or recognized_text.strip() == "" or recognized_text == "Text not recognized" or recognized_text == "Texto não reconhecido":
+                self.logger.warning(
+                    # Log aprimorado
+                    f"⚠️ Speech recognition failed or returned empty/default. Result: '{recognized_text}'")
+                feedback = "Não consegui entender o que você disse. Por favor, tente falar mais claramente."
+                try:
+                    audio_feedback = synthesize_speech(feedback)
+                except Exception as synth_e:
+                    self.logger.warning(
+                        f"⚠️ Error generating audio feedback for unrecognized speech: {synth_e}")
+                    audio_feedback = None
+                return {
+                    "success": True,
+                    "isCorrect": False,
+                    "score": 3,
+                    "recognized_text": "",
+                    "feedback": feedback,
+                    "audio_feedback": audio_feedback
+                }
+
+            # 5. Avaliar a fala reconhecida usando o agente
+            self.logger.info(
+                f"Proceeding with evaluation for recognized text: '{recognized_text}'")
+            try:
+                evaluation = self.speech_evaluator.evaluate_speech(
+                    spoken_text=recognized_text,
+                    expected_text=expected_word,
+                    difficulty="medium"
+                )
+            except Exception as e:
+                self.logger.error(f"⚠️ Speech evaluation error: {str(e)}")
+                evaluation = {
+                    "accuracy": 0.5,
+                    "details": {"phonetic_analysis": "Houve um problema na avaliação da pronúncia."},
+                    "strengths": [],
+                    "improvement_areas": []
+                }
+
+            # 6. Gerar feedback textual e de áudio
+            accuracy_score = int(evaluation.get("accuracy", 0.5) * 10)
+            is_correct = accuracy_score >= 7
+
+            feedback_text = evaluation.get("details", {}).get(
+                "phonetic_analysis",
+                "Muito bem!" if is_correct else "Continue praticando, você consegue!"
+            )
+
+            try:
+                audio_feedback = synthesize_speech(feedback_text)
+            except Exception as e:
+                self.logger.warning(f"⚠️ Error generating audio feedback: {e}")
+                audio_feedback = None
+
+            return {
+                "success": True,
+                "isCorrect": is_correct,
+                "score": accuracy_score,
+                "recognized_text": recognized_text,
+                "matched_sounds": evaluation.get("strengths", []),
+                "challenging_sounds": evaluation.get("improvement_areas", []),
+                "feedback": feedback_text,
+                "audio_feedback": audio_feedback
+            }
+
+        except Exception as e:
+            self.logger.error(
+                f"❌ Pronunciation evaluation error in Coordinator: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            error_feedback_text = "Ocorreu um erro inesperado ao avaliar sua pronúncia."
+            try:
+                error_audio_feedback = synthesize_speech(error_feedback_text)
+            except:
+                error_audio_feedback = None
+            return {
+                "success": False,
+                "message": f"Error during evaluation: {str(e)}",
+                "error_code": "EVALUATION_FAILED_INTERNAL",
+                "feedback": error_feedback_text,
+                "audio_feedback": error_audio_feedback,
+                "isCorrect": False,
+                "score": 0,
+                "recognized_text": "",
+                "matched_sounds": [],
+                "challenging_sounds": [],
+            }
+        finally:
+            try:
+                if wav_path and os.path.exists(wav_path):
+                    os.remove(wav_path)
+                    self.logger.info(f"✓ Cleaned up WAV file: {wav_path}")
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    self.logger.info(
+                        f"✓ Cleaned up temporary file: {temp_path}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Error cleaning temp files: {e}")
 
 
 if __name__ == "__main__":

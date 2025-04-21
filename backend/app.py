@@ -800,8 +800,10 @@ def synthesize_speech_endpoint():
 @app.route('/api/evaluate-pronunciation', methods=['POST'])
 @token_required
 def evaluate_pronunciation(user_id):
+    global mcp_coordinator  # Certifique-se que o coordenador global está acessível
+
     try:
-        # Validate request
+        # 1. Validar request
         if 'audio' not in request.files:
             print("❌ Error: No audio file in request")
             return jsonify({
@@ -821,134 +823,54 @@ def evaluate_pronunciation(user_id):
                 "error_code": "NO_EXPECTED_WORD"
             }), 400
 
-        # Log request details for debugging
-        print(f"Processing pronunciation evaluation:")
+        # Log da chamada
+        print(f"Routing pronunciation evaluation to MCP Coordinator:")
         print(
             f"- Audio file: {audio_file.filename} ({audio_file.content_type})")
         print(f"- Expected word: '{expected_word}'")
         print(f"- User ID: {user_id}")
 
-        # 1. Save audio file temporarily
-        temp_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.webm"
-        audio_file.save(temp_path)
-        print(f"✓ Audio saved to: {temp_path}")
-
-        try:
-            # 2. Convert WebM to WAV using ffmpeg
-            wav_path = f"/tmp/pronunciation_{user_id}_{int(time.time())}.wav"
-
-            # More robust ffmpeg conversion
-            result = subprocess.run([
-                'ffmpeg',
-                '-y',  # Overwrite output file if it exists
-                '-i', temp_path,
-                '-acodec', 'pcm_s16le',
-                '-ar', '16000',
-                '-ac', '1',
-                wav_path
-            ], capture_output=True, text=True)
-
-            if result.returncode == 0:
-                print(f"✓ Audio converted successfully to WAV: {wav_path}")
-                audio_path = wav_path
-            else:
-                print(f"⚠️ FFmpeg conversion error: {result.stderr}")
-                audio_path = temp_path
-
-        except Exception as e:
-            print(f"⚠️ Audio conversion error: {str(e)}")
-            audio_path = temp_path
-
-        # 3. Attempt speech recognition
-        try:
-            recognized_text = recognize_speech(audio_path, expected_word)
-            print(f"✓ Recognition result: '{recognized_text}'")
-        except Exception as e:
-            print(f"⚠️ Speech recognition error: {str(e)}")
-            recognized_text = "Text not recognized"
-
-        # 4. Handle failed recognition
-        if not recognized_text or recognized_text == "Text not recognized":
-            print("⚠️ Speech not recognized")
-            feedback = "Não consegui entender. Por favor, fale mais claramente."
-            audio_feedback = synthesize_speech(feedback)
-
-            # Clean up temp files
-            try:
-                os.remove(temp_path)
-                if 'wav_path' in locals():
-                    os.remove(wav_path)
-            except Exception as e:
-                print(f"⚠️ Error cleaning temp files: {e}")
-
+        # 2. Chamar o MCP Coordinator para fazer a avaliação
+        # Certifique-se que mcp_coordinator está inicializado (deve estar pelo @app.before_request)
+        if not mcp_coordinator:
+            print("❌ Error: MCP Coordinator not initialized!")
             return jsonify({
-                "success": True,
-                "isCorrect": False,
-                "score": 3,
-                "recognized_text": "",
-                "feedback": feedback,
-                "audio_feedback": audio_feedback
-            })
+                "success": False,
+                "message": "Internal server error: Coordinator not available",
+                "error_code": "COORDINATOR_UNAVAILABLE"
+            }), 500
 
-        # 5. Initialize speech evaluator
-        try:
-            evaluator = SpeechEvaluatorAgent(OpenAI(api_key=OPENAI_API_KEY))
-            evaluation = evaluator.evaluate_speech(
-                spoken_text=recognized_text,
-                expected_text=expected_word,
-                difficulty="medium"
-            )
-        except Exception as e:
-            print(f"⚠️ Speech evaluation error: {str(e)}")
-            evaluation = {
-                "accuracy": 0.5,
-                "details": {"phonetic_analysis": "Houve um problema na avaliação."},
-                "strengths": [],
-                "improvement_areas": []
-            }
-
-        # 6. Generate feedback
-        accuracy_score = int(evaluation.get("accuracy", 0.5) * 10)
-        is_correct = accuracy_score >= 7
-
-        feedback_text = evaluation.get("details", {}).get(
-            "phonetic_analysis",
-            "Boa pronúncia!" if is_correct else "Continua a praticar."
+        evaluation_result = mcp_coordinator.evaluate_pronunciation(
+            user_id=user_id,
+            audio_file_storage=audio_file,
+            expected_word=expected_word
         )
 
-        # 7. Generate audio feedback
-        try:
-            audio_feedback = synthesize_speech(feedback_text)
-        except Exception as e:
-            print(f"⚠️ Error generating audio feedback: {e}")
-            audio_feedback = None
+        status_code = 200 if evaluation_result.get("success", False) else 500
+        if not evaluation_result.get("success", False) and status_code == 500:
+            print(
+                f"❌ Evaluation failed within coordinator: {evaluation_result.get('message')}")
 
-        # 8. Clean up temp files
-        try:
-            os.remove(temp_path)
-            if 'wav_path' in locals():
-                os.remove(wav_path)
-        except Exception as e:
-            print(f"⚠️ Error cleaning temp files: {e}")
+        # --- NOVO: Mascarar antes de imprimir na rota ---
+        log_result_route = evaluation_result.copy()
+        audio_key = "audio_feedback"
+        if audio_key in log_result_route and isinstance(log_result_route[audio_key], str) and len(log_result_route[audio_key]) > 100:
+            log_result_route[audio_key] = f"<{audio_key} len={len(log_result_route[audio_key])}>"
+        print(
+            f"✓ Evaluation result from coordinator (Route Log): {log_result_route}")
+        # --- FIM DA MODIFICAÇÃO ---
 
-        return jsonify({
-            "success": True,
-            "isCorrect": is_correct,
-            "score": accuracy_score,
-            "recognized_text": recognized_text,
-            "matched_sounds": evaluation.get("strengths", []),
-            "challenging_sounds": evaluation.get("improvement_areas", []),
-            "feedback": feedback_text,
-            "audio_feedback": audio_feedback
-        })
+        # Retorna o resultado ORIGINAL completo para o frontend
+        return jsonify(evaluation_result), status_code
 
     except Exception as e:
-        print(f"❌ Pronunciation evaluation error: {str(e)}")
+        # Captura exceções que podem ocorrer *antes* da chamada ao coordenador
+        print(f"❌ Top-level pronunciation evaluation error: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": f"Error: {str(e)}",
-            "error_code": "EVALUATION_FAILED"
+            "message": f"Unexpected error in evaluation endpoint: {str(e)}",
+            "error_code": "ENDPOINT_ERROR"
         }), 500
 
 
