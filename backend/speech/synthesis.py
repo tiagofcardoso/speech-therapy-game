@@ -69,25 +69,56 @@ def get_polly_client():
 
 def synthesize_speech(text, voice_settings=None):
     """
-    Convert text to speech using Amazon Polly
+    Sintetiza fala a partir de texto.
 
     Args:
-        text: Text to convert to speech
-        voice_settings: Optional custom voice settings
+        text (str): Texto a ser sintetizado.
+        voice_settings (dict, optional): Configurações da voz.
 
     Returns:
-        Base64 encoded audio data or None if synthesis fails
+        bytes: Dados binários do áudio.
     """
-    if not text:
-        logger.error("Empty text provided for speech synthesis")
-        return None
+    from gtts import gTTS
+    import io
 
     try:
-        # Use Amazon Polly as primary service
-        return _synthesize_amazon(text, voice_settings)
+        print(f"🔊 Configurações de voz: {voice_settings}")
+
+        # Usar o código de idioma apropriado, padrão pt-PT
+        lang_code = voice_settings.get(
+            'language_code', 'pt-PT') if voice_settings else 'pt-PT'
+
+        # Mapear códigos de idioma compatíveis com gTTS
+        lang_map = {
+            'pt-PT': 'pt',
+            'pt-BR': 'pt',
+            'en-US': 'en',
+            'es-ES': 'es'
+        }
+
+        # Usar o mapeamento ou o código original
+        lang = lang_map.get(lang_code, lang_code.split('-')[0])
+
+        # Criar objeto gTTS
+        tts = gTTS(text=text, lang=lang)
+
+        # Salvar em um buffer em memória
+        mp3_fp = io.BytesIO()
+        tts.write_to_fp(mp3_fp)
+        mp3_fp.seek(0)
+
+        # Ler o conteúdo binário
+        audio_bytes = mp3_fp.read()
+
+        print(
+            f"✅ Áudio sintetizado com sucesso. Tamanho: {len(audio_bytes)} bytes")
+        return audio_bytes
+
     except Exception as e:
-        logger.error(f"Error in speech synthesis: {str(e)}")
-        return None
+        print(f"❌ Erro na síntese de fala: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def _synthesize_amazon(text, custom_settings=None):

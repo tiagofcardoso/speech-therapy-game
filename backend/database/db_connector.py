@@ -573,6 +573,46 @@ class DatabaseConnector:
             traceback.print_exc()
             return []
 
+    def save_pronunciation_evaluation(self, session_id, expected_word, recognized_text, is_correct, score, timestamp=None):
+        """
+        Salva o resultado de uma avaliação de pronúncia.
+
+        Args:
+            session_id: ID da sessão
+            expected_word: Palavra que se esperava que o usuário pronunciasse
+            recognized_text: Texto reconhecido no áudio
+            is_correct: Se a pronúncia foi considerada correta
+            score: Pontuação da pronúncia (0-10)
+            timestamp: Data/hora da avaliação (opcional)
+        """
+        if not timestamp:
+            timestamp = datetime.now().isoformat()
+
+        evaluation_data = {
+            "session_id": session_id,
+            "expected_word": expected_word,
+            "recognized_text": recognized_text,
+            "is_correct": is_correct,
+            "score": score,
+            "timestamp": timestamp
+        }
+
+        try:
+            # Salvar no banco de dados
+            evaluation_id = self.db.pronunciation_evaluations.insert_one(
+                evaluation_data).inserted_id
+
+            # Atualizar a sessão com esta avaliação
+            self.db.sessions.update_one(
+                {"session_id": session_id},
+                {"$push": {"evaluations": str(evaluation_id)}}
+            )
+
+            return str(evaluation_id)
+        except Exception as e:
+            print(f"Erro ao salvar avaliação de pronúncia: {e}")
+            return None
+
 
 # Funções para atender às requisições da API
 def get_user_history(user_id):

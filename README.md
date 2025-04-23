@@ -11,17 +11,95 @@ An interactive application for speech therapy, developed to help children and ad
 - **Progression System**: Tracking progress and adapting difficulty to the user's level
 - **Tutor Voice**: Spoken instructions and feedback using natural-sounding text-to-speech
 
-## MCP (Model Context Protocol) Agent Architecture
 
-The project uses an advanced MCP architecture with various specialized agents working together:
+## MCP (Model Context Protocol) Agentic Architecture
 
-- **MCPCoordinator**: Orchestrates communication between agents and manages game sessions
-- **GameDesignerAgent**: Responsible for creating customized games and exercises
-- **SpeechEvaluatorAgent**: Evaluates the user's pronunciation using AI models
-- **TutorAgent**: Provides pedagogical feedback and personalized instructions with voice output
-- **ProgressionManagerAgent**: Monitors user progress and adjusts difficulty
+This project implements an advanced MCP Agentic architecture that coordinates multiple specialized AI agents working together to deliver personalized speech therapy exercises.
 
-This modular architecture allows dynamic generation of educational content adapted to the specific needs of each user.
+### Key Components
+
+#### 1. Model Integration
+- Seamless integration with OpenAI and other LLM providers
+- Models are abstracted behind agent interfaces for flexibility
+- Support for various model types based on specific agent needs
+
+#### 2. Context Management
+- `ModelContext` provides structured state sharing between agents
+- Persistent storage of results, user data, and session information
+- Context-aware agents that build upon each other's outputs
+
+#### 3. Protocol-Based Communication
+- Standardized `Message` objects define inter-agent communication
+- `Tool` definitions create contracts for agent capabilities
+- MCPServer manages message routing and response handling
+
+#### 4. Specialized Agents
+
+- **MCPCoordinator**: Orchestrates communication and manages the complete system
+- **GameDesignerAgent**: Creates customized games and exercises based on user needs
+- **SpeechEvaluatorAgent**: Analyzes pronunciation accuracy using AI models
+- **TutorAgent**: Provides pedagogical feedback with voice synthesis capabilities
+- **ProgressionManagerAgent**: Adapts difficulty based on user performance
+- **SearchAgent**: Retrieves relevant exercises and educational resources
+
+### Advanced Features
+
+- **Telemetry and Monitoring**: Comprehensive tracking of agent performance
+- **Resilience Mechanisms**: Automatic retries with exponential backoff
+- **Context-Aware Execution**: Methods that automatically integrate with shared context
+- **Async-First Design**: Non-blocking operations for better performance
+
+### Architecture Diagram
+┌────────────┐         ┌────────────┐         ┌────────────┐
+│   Client   │         │  API Layer │         │ MCP System │
+│            │ ──────► │            │ ──────► │            │
+└────────────┘         └────────────┘         └────────────┘
+                                                    │
+                                                    ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                             ModelContext                                  │
+└──────────────────────────────────────────────────────────────────────────┘
+       ▲                 ▲                  ▲                  ▲
+       │                 │                  │                  │
+       ▼                 ▼                  ▼                  ▼
+┌────────────┐   ┌────────────┐    ┌────────────┐    ┌────────────┐
+│    Game    │   │   Speech   │    │    Tutor   │    │   Search   │
+│  Designer  │   │ Evaluator  │    │    Agent   │    │    Agent   │
+└────────────┘   └────────────┘    └────────────┘    └────────────┘
+
+## Usage Exemple
+# Initialize the MCP system
+mcp = MCPSystem(api_key="your-openai-key", db_connector=db)
+await mcp.initialize_agents()
+
+# Create a session using the MCP workflow
+session = await mcp.create_interactive_session(user_id="user123")
+
+# Process user input through multiple coordinated agents
+result = await mcp.process_user_response(
+    user_id="user123",
+    response="User's spoken text",
+    expected_text="Target pronunciation",
+    session_id=session["session_id"]
+)
+
+# Access the combined results from multiple agents
+print(f"Evaluation score: {result['evaluation']['score']}")
+print(f"Feedback: {result['feedback']['text']}")
+print(f"Next exercise: {result['next_exercise']['text']}")
+
+
+### Benefits
+
+This architecture provides significant advantages:
+- **Scalability**: Agents operate independently and can scale separately
+- **Flexibility**: New capabilities can be added without changing existing agents
+- **Adaptability**: System dynamically adjusts to user needs and preferences
+- **Observability**: Comprehensive telemetry across all operations
+- **Resilience**: Built-in error handling and graceful degradation
+
+This modular approach allows dynamic generation of educational content perfectly adapted to each user's specific needs while maintaining system reliability and performance.
+
 
 ## Technologies Used
 

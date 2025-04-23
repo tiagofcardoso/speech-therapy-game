@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional, Union
 import logging
 import json
 from openai import OpenAI
-from .search_tool import GoogleSearchTool
+from ..agents.search_agent import GoogleSearchTool
 
 logger = logging.getLogger("AITools")
 

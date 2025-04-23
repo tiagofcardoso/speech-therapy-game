@@ -33,6 +33,23 @@ const GamePlay = () => {
     const audioContextRef = useRef(null);
     const analyserIntervalRef = useRef(null);
 
+    // Adicione esta função auxiliar para obter os exercícios de forma consistente
+    const getExercisesList = (gameData) => {
+        if (!gameData) return [];
+
+        // Primeiro tenta content, depois exercises
+        if (gameData.content && Array.isArray(gameData.content) && gameData.content.length > 0) {
+            return gameData.content;
+        }
+
+        // Tenta exercises como fallback
+        if (gameData.exercises && Array.isArray(gameData.exercises) && gameData.exercises.length > 0) {
+            return gameData.exercises;
+        }
+
+        return [];
+    };
+
     useEffect(() => {
         // Tentar restaurar sessionId do localStorage para jogo em andamento
         const savedSessionId = localStorage.getItem(`game_session_${gameId}`);
@@ -48,14 +65,26 @@ const GamePlay = () => {
                 const response = await api.get(`/api/games/${gameId}`);
                 if (response.data.success) {
                     console.log("Game data received:", response.data.game);
-                    setGame(response.data.game);
+
+                    // Normalizar a estrutura do jogo - IMPORTANTE
+                    const gameData = response.data.game;
+
+                    // Se temos exercises mas não content, copiar de exercises para content
+                    if (gameData.exercises && Array.isArray(gameData.exercises) &&
+                        (!gameData.content || !Array.isArray(gameData.content))) {
+                        console.log("Normalizando estrutura do jogo: copiando exercises para content");
+                        gameData.content = [...gameData.exercises];
+                    }
+
+                    setGame(gameData);
 
                     // Create a game session after loading the game
-                    const sessionId = await createGameSession(response.data.game);
+                    const sessionId = await createGameSession(gameData);
 
                     // Pré-carregar o áudio da primeira palavra após criar a sessão
-                    if (response.data.game.content && response.data.game.content.length > 0) {
-                        const firstWord = response.data.game.content[0].word;
+                    const exercises = getExercisesList(gameData);
+                    if (exercises.length > 0) {
+                        const firstWord = exercises[0].word;
                         if (firstWord) {
                             console.log("🎯 Pré-carregando áudio da primeira palavra:", firstWord);
                             fetchAudioForWord(firstWord);
@@ -136,6 +165,82 @@ const GamePlay = () => {
         }
     };
 
+    // Função para sintetizar texto em fala com fallback melhorado
+    const fetchAudioForWord = async (word) => {
+        if (!word) return;
+
+        try {
+            setIsLoadingAudio(true);
+            console.log(`🎧 Buscando áudio para a palavra "${word}"`);
+
+            // Primeiro tente o endpoint simples
+            try {
+                const response = await api.post('/api/tts-simple', {
+                    text: word
+                }, {
+                    timeout: 5000 // Tempo limite de 5 segundos
+                });
+
+                if (response.data && response.data.audio_data) {
+                    console.log(`✅ Áudio recebido de /api/tts-simple: ${response.data.audio_data.length} caracteres`);
+                    setWordAudio(response.data.audio_data);
+                    setMascotMood('happy');
+                    setMascotMessage(`Vamos praticar! Escuta a palavra "${word}" e depois repete-a.`);
+                    return;
+                }
+            } catch (simpleError) {
+                console.warn(`⚠️ Erro no endpoint simples: ${simpleError.message}. Tentando endpoint normal...`);
+
+                // Se o endpoint simples falhar, tente o endpoint normal com timeout
+                try {
+                    const response = await api.post('/api/synthesize-speech', {
+                        text: word,
+                        voice_settings: { language_code: 'pt-PT' }
+                    }, {
+                        timeout: 5000 // Tempo limite de 5 segundos
+                    });
+
+                    if (response.data && response.data.audio_data) {
+                        console.log(`✅ Áudio recebido de /api/synthesize-speech: ${response.data.audio_data.length} caracteres`);
+                        setWordAudio(response.data.audio_data);
+                        setMascotMood('happy');
+                        setMascotMessage(`Vamos praticar! Escuta a palavra "${word}" e depois repete-a.`);
+                        return;
+                    }
+                } catch (mainError) {
+                    console.warn(`⚠️ Erro no endpoint principal: ${mainError.message}. Usando síntese do navegador...`);
+                }
+            }
+
+            // Se ambos os endpoints falharem, use a API do navegador
+            console.log("🔊 Usando síntese de fala do navegador como fallback");
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = 'pt-PT';
+
+                // Resetar todas as vozes existentes
+                window.speechSynthesis.cancel();
+
+                // Certificar-se de que o mascote dê feedback visual
+                setMascotMood('happy');
+                setMascotMessage(`Vamos praticar! Diga a palavra "${word}" em voz alta.`);
+
+                // Falar a palavra
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.error("❌ API de síntese de fala do navegador não disponível");
+                setMascotMood('sad');
+                setMascotMessage(`Não foi possível reproduzir o áudio. Tente novamente.`);
+            }
+        } catch (err) {
+            console.error(`❌ Erro geral ao buscar áudio: ${err.message}`);
+            setMascotMood('sad');
+            setMascotMessage(`Ocorreu um erro ao buscar o áudio. Tente novamente.`);
+        } finally {
+            setIsLoadingAudio(false);
+        }
+    };
+
     useEffect(() => {
         const fetchWordAudio = async () => {
             const currentExercise = getCurrentExercise();
@@ -143,32 +248,7 @@ const GamePlay = () => {
 
             try {
                 setIsLoadingAudio(true);
-                console.log(`🔊 Solicitando áudio para a palavra: "${currentExercise.word}"`);
-
-                const response = await api.post('/api/synthesize-speech', {
-                    text: currentExercise.word,
-                    voice_settings: {
-                        language_code: 'pt-PT' // ou 'pt-BR' dependendo da variante desejada
-                    }
-                });
-
-                console.log('📨 Resposta da API de síntese:', response.status, response.statusText);
-
-                if (response.data && response.data.audio_data) {
-                    console.log('✅ Áudio recebido com sucesso para a palavra:', currentExercise.word);
-                    setWordAudio(response.data.audio_data);
-                } else {
-                    console.warn('⚠️ Resposta da API não contém dados de áudio:', response.data);
-                }
-            } catch (err) {
-                console.error("❌ Erro ao obter áudio da palavra:", err);
-                console.error("Detalhes:", err.response?.data || err.message);
-
-                // Tentar novamente após um curto atraso
-                setTimeout(() => {
-                    console.log("🔄 Tentando novamente buscar o áudio...");
-                    fetchWordAudio();
-                }, 2000);
+                await fetchAudioForWord(currentExercise.word);
             } finally {
                 setIsLoadingAudio(false);
             }
@@ -177,47 +257,6 @@ const GamePlay = () => {
         // Chamar imediatamente quando o exercício atual mudar
         fetchWordAudio();
     }, [currentExerciseIndex]);
-
-    // Função auxiliar para buscar áudio para uma palavra específica
-    const fetchAudioForWord = async (word) => {
-        if (!word) return;
-
-        try {
-            setIsLoadingAudio(true);
-            console.log(`🎧 Buscando áudio para a palavra "${word}"`);
-
-            const response = await api.post('/api/synthesize-speech', {
-                text: word,
-                voice_settings: {
-                    language_code: 'pt-PT'
-                }
-            });
-
-            console.log(`👂 Resposta da API para "${word}":`, response.status);
-
-            if (response.data && response.data.success && response.data.audio_data) {
-                console.log(`🎵 Áudio recebido para "${word}" - autoplay iniciará em breve`);
-                setWordAudio(response.data.audio_data);
-
-                // Definir um mascot message para incentivar a primeira interação
-                if (!mascotMessage) {
-                    setMascotMood('happy');
-                    setMascotMessage(`Vamos praticar! Escuta a palavra "${word}" e depois repete-a.`);
-                }
-            } else {
-                console.warn(`⚠️ Não foi possível obter áudio para "${word}"`, response.data);
-            }
-        } catch (err) {
-            console.error(`❌ Erro ao buscar áudio para "${word}":`, err);
-            // Tentar novamente após um curto atraso se falhar
-            setTimeout(() => {
-                console.log(`🔁 Tentando novamente obter áudio para "${word}"...`);
-                fetchAudioForWord(word);
-            }, 3000);
-        } finally {
-            setIsLoadingAudio(false);
-        }
-    };
 
     const startRecording = async () => {
         try {
@@ -401,12 +440,32 @@ const GamePlay = () => {
 
             const { isCorrect, score: evalScore, feedback: evalFeedback, audio_feedback, recognized_text } = response;
 
+            // Processar o audio_feedback
+            if (audio_feedback) {
+                console.log(`🎵 Áudio de feedback recebido (${audio_feedback.length} caracteres)`);
+                try {
+                    // Verificar se é uma string base64 válida
+                    if (!/^[A-Za-z0-9+/=]+$/.test(audio_feedback)) {
+                        console.warn("⚠️ Dados de áudio de feedback em formato inválido");
+                    }
+
+                    // Criar URL de dados
+                    const feedbackAudioUrl = `data:audio/mp3;base64,${audio_feedback}`;
+                    setFeedbackAudio(feedbackAudioUrl);
+                } catch (err) {
+                    console.error("❌ Erro ao processar áudio de feedback:", err);
+                    setFeedbackAudio(null);
+                }
+            } else {
+                console.warn("⚠️ Nenhum áudio de feedback recebido da API");
+                setFeedbackAudio(null);
+            }
+
             setFeedback({
                 correct: isCorrect,
                 message: evalFeedback || (isCorrect ? "Muito bem!" : "Tenta novamente."),
                 recognizedText: recognized_text || "Não reconhecido"
             });
-            setFeedbackAudio(audio_feedback);
 
             if (isCorrect) {
                 setScore(prev => prev + (evalScore || 0));
@@ -425,30 +484,45 @@ const GamePlay = () => {
         }
     };
 
+    // Modificar a função getCurrentExercise para usar getExercisesList
     const getCurrentExercise = () => {
-        // Verifica se 'game', 'game.content' e o índice são válidos
-        if (!game || !game.content || !Array.isArray(game.content) || game.content.length === 0) {
-            console.warn("getCurrentExercise: Dados do jogo (game.content) ainda não disponíveis ou inválidos.", { game });
-            return null; // Retorna null se os dados não estiverem prontos
+        if (!game) {
+            console.warn("getCurrentExercise: Dados do jogo ainda não disponíveis.", { game });
+            return null;
         }
-        if (currentExerciseIndex < 0 || currentExerciseIndex >= game.content.length) {
-            console.warn(`getCurrentExercise: Índice inválido (${currentExerciseIndex}) para o tamanho do conteúdo (${game.content.length}).`);
-            return null; // Retorna null se o índice for inválido
+
+        // Usar a função auxiliar para obter a lista de exercícios
+        const exercisesList = getExercisesList(game);
+
+        if (exercisesList.length === 0) {
+            console.warn("getCurrentExercise: Dados dos exercícios ainda não disponíveis ou inválidos.", {
+                hasContent: !!game.content,
+                hasExercises: !!game.exercises,
+                game: game
+            });
+            return null;
+        }
+
+        if (currentExerciseIndex < 0 || currentExerciseIndex >= exercisesList.length) {
+            console.warn(`getCurrentExercise: Índice inválido (${currentExerciseIndex}) para o tamanho da lista (${exercisesList.length}).`);
+            return null;
         }
 
         // Loga o exercício específico que será retornado
-        const exercise = game.content[currentExerciseIndex];
-        // Log importante para ver a estrutura real do exercício
+        const exercise = exercisesList[currentExerciseIndex];
         console.log(`getCurrentExercise: Retornando exercício no índice ${currentExerciseIndex}:`, JSON.stringify(exercise));
         return exercise;
     };
 
+    // Modificar o moveToNextExercise para usar getExercisesList
     const moveToNextExercise = () => {
         // Sempre logar o clique no botão
         console.log("Botão clicado: moveToNextExercise");
-        console.log("Estado atual: exercício", currentExerciseIndex + 1, "de", game.content?.length || 0);
 
-        if (currentExerciseIndex < (game.content?.length || 0) - 1) {
+        const exercisesList = getExercisesList(game);
+        console.log("Estado atual: exercício", currentExerciseIndex + 1, "de", exercisesList.length);
+
+        if (currentExerciseIndex < exercisesList.length - 1) {
             console.log("Avançando para o próximo exercício...");
             setCurrentExerciseIndex(prev => prev + 1);
             setFeedback(null);
@@ -460,7 +534,7 @@ const GamePlay = () => {
                 gameId: gameId,
                 sessionId: sessionId,
                 currentExerciseIndex: currentExerciseIndex,
-                totalExercises: game.content?.length,
+                totalExercises: exercisesList.length,
                 score: score
             });
 
@@ -549,7 +623,7 @@ const GamePlay = () => {
         );
     }
 
-    // Função para salvar o progresso e a pontuação na base de dados
+    // Ajustar a função saveGameProgress
     const saveGameProgress = async (completionOption) => {
         try {
             if (!sessionId) {
@@ -561,8 +635,11 @@ const GamePlay = () => {
                 return;
             }
 
+            // Usar getExercisesList para obter o comprimento correto
+            const exercisesList = getExercisesList(game);
+
             // Calcular a pontuação final como porcentagem
-            const finalScore = Math.min(100, (score / ((game.content?.length || 1) * 10)) * 100);
+            const finalScore = Math.min(100, (score / (exercisesList.length * 10)) * 100);
 
             console.log(`----- INICIANDO SALVAMENTO DE PROGRESSO ------`);
             console.log(`Dados do jogo:\n- ID do jogo: ${gameId}\n- ID da sessão: ${sessionId}\n- Pontuação: ${finalScore}\n- Opção: ${completionOption}`);
@@ -667,15 +744,20 @@ const GamePlay = () => {
         }
     };
 
+    // Ajustar a renderização principal para usar getExercisesList
     if (gameComplete) {
+        // Obter exercisesList para o cálculo da pontuação
+        const exercisesList = getExercisesList(game);
+
         return (
             <div className="game-play-complete">
                 <div className="game-complete-header">
                     <span className="game-complete-emoji">🎉</span>
                     <h2>Parabéns!</h2>
-                    {/* Ajout d'une animation de confettis */}
+                    {/* Animação de confetti */}
                     <div className="confetti-container">
-                        {Array.from({ length: 50 }).map((_, index) => (
+                        {/* Corrigindo o erro aqui - estava faltando a estrutura do map */}
+                        {Array(20).fill(0).map((_, index) => (
                             <div
                                 key={index}
                                 className="confetti"
@@ -696,7 +778,7 @@ const GamePlay = () => {
                     <div className="score-bar">
                         <div
                             className="score-fill"
-                            style={{ width: `${Math.min(100, (score / ((game.content?.length || 1) * 10)) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (score / (exercisesList.length * 10)) * 100)}%` }}
                         ></div>
                     </div>
                 </div>
@@ -741,16 +823,17 @@ const GamePlay = () => {
         );
     }
 
+    // Ajustar o JSX principal
     return (
         <div className="game-play-container">
             <div className="game-play-header">
                 <h2>{game.title}</h2>
                 <div className="game-progress">
-                    <span>Exercício {currentExerciseIndex + 1} de {game.content?.length || 0}</span>
+                    <span>Exercício {currentExerciseIndex + 1} de {getExercisesList(game).length}</span>
                     <div className="progress-bar">
                         <div
                             className="progress-fill"
-                            style={{ width: `${((currentExerciseIndex + 1) / (game.content?.length || 1)) * 100}%` }}
+                            style={{ width: `${((currentExerciseIndex + 1) / getExercisesList(game).length) * 100}%` }}
                         ></div>
                     </div>
                 </div>
@@ -831,7 +914,7 @@ const GamePlay = () => {
                             onClick={moveToNextExercise}
                             className="next-exercise-button"
                         >
-                            {currentExerciseIndex < (game.content?.length || 0) - 1 ? 'Próximo Exercício' : 'Finalizar Jogo'}
+                            {currentExerciseIndex < (getExercisesList(game).length || 0) - 1 ? 'Próximo Exercício' : 'Finalizar Jogo'}
                         </button>
                     </div>
                 ) : (

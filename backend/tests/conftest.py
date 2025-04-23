@@ -2,7 +2,25 @@ import pytest
 import os
 import sys
 import logging
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# Add backend to Python path
+backend_path = project_root / "backend"
+sys.path.insert(0, str(backend_path))
+
+# Mock problematic modules
+sys.modules['speech'] = MagicMock()
+sys.modules['speech.synthesis'] = MagicMock()
+sys.modules['speech.recognition'] = MagicMock()
+sys.modules['speech.synthesis'].synthesize_speech = MagicMock(
+    return_value="mock_audio_data")
+sys.modules['speech.recognition'].recognize_speech = MagicMock(
+    return_value="recognized text")
 
 # Add the project root to Python path to make imports work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

@@ -29,7 +29,7 @@ class GoogleSearchTool:
         self.logger = logging.getLogger("GoogleSearchTool")
         self.logger.info("GoogleSearchTool inicializada")
 
-    def search(self, query, num_results=5, language="pt-BR"):
+    def search(self, query, num_results=5, language="PT"):
         """
         Realiza uma busca com a Google Search API
 

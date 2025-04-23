@@ -1,3 +1,8 @@
+from pathlib import Path
+from routes.api import api_bp
+import time
+from gtts import gTTS
+import io
 import os
 import sys
 import json
@@ -11,18 +16,24 @@ import uuid
 import base64
 import tempfile
 import subprocess
+import asyncio  # Add asyncio import
+from asgiref.sync import async_to_sync  # Add this import
+from functools import wraps  # Add this import
+from functools import lru_cache  # Add lru_cache import
 from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
 # Import app instance and JWT_SECRET_KEY from config
 from config import DEBUG, OPENAI_API_KEY, app, JWT_SECRET_KEY
 from bson import ObjectId
 from flask.json import JSONEncoder
 import jwt
-from flask import Flask, request, jsonify, g, send_from_directory
+from flask import Flask, request, jsonify, g, send_from_directory, Response
 from flask_cors import CORS
 from speech.recognition import recognize_speech
 from speech.synthesis import synthesize_speech, get_example_word_for_phoneme
 from speech.lipsync import LipsyncGenerator
-from ai.server.mcp_coordinator import MCPCoordinator
+from ai.server.mcp_coordinator import MCPSystem
+# Import Message and ModelContext
+from ai.server.mcp_server import Message, ModelContext
 from ai.agents.game_designer_agent import GameDesignerAgent as GameGenerator
 from auth.auth_service import AuthService
 from auth.auth_middleware import token_required
@@ -30,10 +41,13 @@ from database.db_connector import DatabaseConnector
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Importar o blueprint API
-from routes.api import api_bp
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-from pathlib import Path
+# Importar o blueprint API
+
 # Add project root to Python path
 if __name__ == "__main__":
     current_dir = Path(__file__).resolve().parent
@@ -41,6 +55,15 @@ if __name__ == "__main__":
     project_root = current_dir.parent.parent.parent
     sys.path.insert(0, str(project_root))
 
+# Add this decorator definition
+
+
+def async_route(f):
+    """Wrapper for async route handlers"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return async_to_sync(f)(*args, **kwargs)
+    return wrapper
 
 # Classe para codificar ObjectIds para JSON
 
@@ -63,6 +86,7 @@ if not OPENAI_API_KEY:
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
 
 # Registrar o blueprint da API
 app.register_blueprint(api_bp, url_prefix='/api')
@@ -147,10 +171,11 @@ def initialize_services():
         try:
             # Inicializar serviços
             game_generator = GameGenerator()
-            # Passar o db_connector para o MCPCoordinator
-            mcp_coordinator = MCPCoordinator(
+            # Passar o db_connector para o MCPSystem (Change MCPCoordinator to MCPSystem)
+            mcp_coordinator = MCPSystem(
                 api_key=OPENAI_API_KEY, db_connector=db)
-            print("MCP Coordinator initialized with database connection")
+            # Changed Coordinator to System
+            print("MCP System initialized with database connection")
         except Exception as e:
             print(f"Error initializing services: {str(e)}")
 
@@ -174,10 +199,10 @@ def generate_token(user_id):
     print(f"JWT_SECRET_KEY utilizada: {JWT_SECRET_KEY}")
     """
     Gera um token JWT para o usuário
-    
+
     Args:
         user_id: ID do usuário
-        
+
     Returns:
         str: Token JWT
     """
@@ -421,92 +446,41 @@ def update_user_profile(user_id, requesting_user_id):
 
 @app.route('/api/start_game', methods=['POST'])
 @token_required
-def start_game(user_id):
-    global mcp_coordinator, db  # Garantir acesso
+@async_route
+async def start_game(user_id):
     try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+
+        if not game_id:
+            return jsonify({
+                "success": False,
+                "message": "No game_id provided"
+            }), 400
+
         print(f"========== INICIANDO SESSÃO DE JOGO (Rota -> Coordenador) ==========")
         print(f"User ID: {user_id}")
-
-        data = request.json
-        game_id = data.get('game_id')
-        difficulty = data.get('difficulty', 'iniciante')
-        title = data.get('title', 'Jogo de Pronúncia')
-        game_type = data.get('game_type', 'exercícios de pronúncia')
-
         print(
-            f"Dados recebidos: game_id={game_id}, título={title}, dificuldade={difficulty}")
+            f"Dados recebidos: game_id={game_id}, título={data.get('title')}, dificuldade={data.get('difficulty')}")
 
-        # Verificar se o coordenador está inicializado
-        if not mcp_coordinator:
-            print("❌ Error: MCP Coordinator not initialized!")
-            return jsonify({"success": False, "message": "Erro interno: Coordenador não disponível"}), 500
+        session_result = await mcp_coordinator.load_existing_game_session(user_id, game_id)
 
-        # Buscar perfil do usuário (necessário para ambos os casos)
-        user = db.get_user_by_id(user_id)
-        if not user:
-            # Considerar tratamento de erro mais robusto se usuário não for encontrado
-            print(f"⚠️ Usuário não encontrado: {user_id}")
-            return jsonify({"error": "Usuário não encontrado"}), 404
+        # Log the response structure
+        print(f"Response structure: {json.dumps(session_result, indent=2)}")
 
-        user_profile = {
-            "name": user.get('name', 'Amigo'),
-            "age": user.get('age', 6),
-            "history": user.get('history', {})
-        }
-        print(f"Perfil do usuário obtido: {user_profile.get('name')}")
+        if not session_result.get("success"):
+            raise Exception(session_result.get(
+                "error", "Unknown error loading game session"))
 
-        session_result = None
-        if game_id:
-            # Carregar sessão de jogo existente
-            print(
-                f"Chamando coordenador para carregar jogo existente: {game_id}")
-            session_result = mcp_coordinator.load_existing_game_session(
-                user_id, game_id, user_profile)
-        else:
-            # Criar nova sessão de jogo
-            print("Chamando coordenador para criar nova sessão de jogo")
-            session_result = mcp_coordinator.create_new_game_session(
-                user_id, user_profile, difficulty, title, game_type)
-
-        # Verificar se a criação/carregamento da sessão foi bem-sucedida
-        if not session_result or not session_result.get("success"):
-            print(
-                f"❌ Falha ao iniciar sessão via coordenador: {session_result.get('message')}")
-            return jsonify({"error": session_result.get("message", "Falha ao iniciar sessão")}), 500
-
-        # Preparar a resposta para o frontend
-        exercises = session_result.get("exercises", [])
-        if not exercises:
-            print("⚠️ Coordenador retornou lista de exercícios vazia!")
-            # Adicionar um exercício padrão para evitar erro no frontend
-            exercises = [
-                {"word": "erro", "prompt": "Exercício não carregado", "hint": "", "visual_cue": "erro"}]
-
-        # Pega o primeiro exercício retornado
-        current_exercise_data = exercises[0]
-
-        response = {
-            "session_id": session_result["session_id"],
-            "instructions": session_result.get("instructions", ["Bem-vindo!"]),
-            "current_exercise": {
-                "word": current_exercise_data.get("word", "teste"),
-                "prompt": current_exercise_data.get("prompt", "Pronuncie"),
-                "hint": current_exercise_data.get("hint", ""),
-                "visual_cue": current_exercise_data.get("visual_cue", current_exercise_data.get("word", "teste")),
-                "index": 0,  # Sempre começa no índice 0
-                "total": len(exercises)  # Total de exercícios na sessão
-            }
-        }
-
-        print(
-            f"Resposta preparada: {response['session_id']}, Exercícios: {len(exercises)}")
-        print("========== SESSÃO DE JOGO INICIADA COM SUCESSO (Via Coordenador) ==========")
-        return jsonify(response), 200
+        return jsonify(session_result)
 
     except Exception as e:
         print(f"❌ Erro na rota /api/start_game: {str(e)}")
         traceback.print_exc()
-        return jsonify({"error": f"Falha ao iniciar jogo: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"Failed to start game: {str(e)}"
+        }), 500
 
 
 @app.route('/api/submit_response', methods=['POST'])
@@ -614,64 +588,142 @@ def synthesize(user_id):
     return jsonify({'audio': audio}), 200
 
 
-@app.route('/api/synthesize-speech', methods=['OPTIONS'])
-def options_synthesize_speech():
-    """Endpoint para lidar com requisições OPTIONS para CORS"""
-    response = jsonify({'status': 'ok'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers',
-                         'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    return response
-
-
 @app.route('/api/synthesize-speech', methods=['POST'])
 def synthesize_speech_endpoint():
-    """
-    Endpoint para sintetizar fala usando Amazon Polly
-    """
+    """Endpoint para sintetizar fala a partir de texto"""
     try:
         print("Processando solicitação de síntese de fala")
-        data = request.get_json()
+        data = request.json
 
         if not data or 'text' not in data:
-            print("❌ Erro: Texto para síntese não fornecido")
-            return jsonify({'success': False, 'error': 'No text provided'}), 400
+            print("❌ Dados de entrada inválidos")
+            return jsonify({'success': False, 'error': 'Missing text parameter'}), 400
 
-        text = data.get('text')
-        voice_settings = data.get('voice_settings', {})
+        text = data.get('text', '').strip()
+        if not text:
+            print("❌ Texto vazio")
+            return jsonify({'success': False, 'error': 'Empty text'}), 400
 
-        # Log da solicitação para debug
         print(f"📝 Texto para síntese: '{text}'")
-        print(f"🔊 Configurações de voz: {voice_settings}")
 
-        # Usar a função de síntese do módulo speech passando as configurações de voz diretamente
-        audio_data = synthesize_speech(text, voice_settings)
+        # Usar gTTS diretamente aqui para evitar falhas na função externa
+        from gtts import gTTS
+        import io
 
-        if not audio_data:
-            print("❌ Erro: Falha ao gerar áudio")
-            return jsonify({'success': False, 'error': 'Failed to synthesize speech'}), 500
+        # Gerar áudio diretamente
+        try:
+            mp3_io = io.BytesIO()
+            tts = gTTS(text=text, lang='pt', slow=False)
+            tts.write_to_fp(mp3_io)
+            mp3_io.seek(0)
+            audio_bytes = mp3_io.read()
 
-        print("✅ Áudio sintetizado com sucesso.")
+            # Verificar se o áudio foi gerado com sucesso
+            if not audio_bytes or len(audio_bytes) < 100:
+                print("❌ Falha ao gerar áudio - bytes insuficientes")
+                return Response(
+                    json.dumps(
+                        {'success': False, 'error': 'Failed to generate audio'}),
+                    mimetype='application/json',
+                    status=500
+                )
 
-        # Retornar o áudio codificado em base64
-        return jsonify({
-            'success': True,
-            'audio_data': audio_data
-        }), 200
+            # Codificar em base64 e converter para string
+            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+            print(
+                f"✅ Áudio gerado: {len(audio_bytes)} bytes, Base64: {len(audio_b64)} caracteres")
+
+            # Criar resposta sem usar jsonify
+            response_data = json.dumps(
+                {'success': True, 'audio_data': audio_b64})
+            return Response(
+                response_data,
+                mimetype='application/json',
+                status=200
+            )
+
+        except Exception as e:
+            print(f"❌ Erro interno de síntese: {str(e)}")
+            traceback.print_exc()
+            return Response(
+                json.dumps(
+                    {'success': False, 'error': f'Synthesis error: {str(e)}'}),
+                mimetype='application/json',
+                status=500
+            )
+
     except Exception as e:
-        print(f"❌ Erro na síntese de fala: {str(e)}")
+        print(f"❌ Erro geral no endpoint: {str(e)}")
         traceback.print_exc()
-        return jsonify({'success': False, 'error': f'Speech synthesis error: {str(e)}'}), 500
+        return Response(
+            json.dumps(
+                {'success': False, 'error': f'General error: {str(e)}'}),
+            mimetype='application/json',
+            status=500
+        )
+
+
+@app.route('/api/tts-simple', methods=['POST', 'OPTIONS'])
+def simple_tts_endpoint():
+    """Endpoint simplificado para síntese de fala"""
+    # Tratar requisições OPTIONS para CORS
+    if request.method == 'OPTIONS':
+        response = Response('', 200)
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers',
+                             'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return Response('{"success":false,"error":"Missing text parameter"}',
+                            mimetype='application/json', status=400)
+
+        text = data.get('text', '').strip()
+        if not text:
+            return Response('{"success":false,"error":"Empty text"}',
+                            mimetype='application/json', status=400)
+
+        print(f"Texto para TTS simples: '{text}'")
+
+        # Usar gTTS
+        from gtts import gTTS
+        import io
+
+        # Criar buffer e gerar áudio
+        mp3_fp = io.BytesIO()
+        tts = gTTS(text=text, lang='pt')
+        tts.write_to_fp(mp3_fp)
+        mp3_fp.seek(0)
+
+        # Codificar para base64
+        audio_b64 = base64.b64encode(mp3_fp.read()).decode('utf-8')
+        print(f"TTS simples: Áudio gerado com {len(audio_b64)} caracteres")
+
+        # Resposta direta sem usar jsonify
+        return Response(
+            '{"success":true,"audio_data":"' + audio_b64 + '"}',
+            mimetype='application/json',
+            status=200
+        )
+
+    except Exception as e:
+        print(f"❌ Erro no TTS simples: {str(e)}")
+        traceback.print_exc()
+        return Response(
+            '{"success":false,"error":"' + str(e).replace('"', '\\"') + '"}',
+            mimetype='application/json',
+            status=500
+        )
 
 
 @app.route('/api/evaluate-pronunciation', methods=['POST'])
 @token_required
-def evaluate_pronunciation(user_id):
-    global mcp_coordinator  # Certifique-se que o coordenador global está acessível
-
+@async_route
+async def evaluate_pronunciation(user_id):
     try:
-        # 1. Validar request
         if 'audio' not in request.files:
             print("❌ Error: No audio file in request")
             return jsonify({
@@ -682,7 +734,9 @@ def evaluate_pronunciation(user_id):
 
         audio_file = request.files['audio']
         expected_word = request.form.get('expected_word')
+        session_id = request.form.get('session_id')
 
+        # Validação do expected_word
         if not expected_word or expected_word.strip() == '':
             print("❌ Error: No expected word provided")
             return jsonify({
@@ -697,42 +751,33 @@ def evaluate_pronunciation(user_id):
             f"- Audio file: {audio_file.filename} ({audio_file.content_type})")
         print(f"- Expected word: '{expected_word}'")
         print(f"- User ID: {user_id}")
+        if session_id:
+            print(f"- Session ID: {session_id}")
 
-        # 2. Chamar o MCP Coordinator para fazer a avaliação
-        # Certifique-se que mcp_coordinator está inicializado (deve estar pelo @app.before_request)
-        if not mcp_coordinator:
-            print("❌ Error: MCP Coordinator not initialized!")
-            return jsonify({
-                "success": False,
-                "message": "Internal server error: Coordinator not available",
-                "error_code": "COORDINATOR_UNAVAILABLE"
-            }), 500
-
-        evaluation_result = mcp_coordinator.evaluate_pronunciation(
+        # Agora podemos usar await com a função assíncrona
+        evaluation_result = await mcp_coordinator.evaluate_pronunciation(
+            audio_file=audio_file,
+            expected_word=expected_word,
             user_id=user_id,
-            audio_file_storage=audio_file,
-            expected_word=expected_word
+            session_id=session_id
         )
 
+        # Resto do código permanece igual...
         status_code = 200 if evaluation_result.get("success", False) else 500
         if not evaluation_result.get("success", False) and status_code == 500:
             print(
                 f"❌ Evaluation failed within coordinator: {evaluation_result.get('message')}")
 
-        # --- NOVO: Mascarar antes de imprimir na rota ---
+        # Mascaramento do log
         log_result_route = evaluation_result.copy()
         audio_key = "audio_feedback"
         if audio_key in log_result_route and isinstance(log_result_route[audio_key], str) and len(log_result_route[audio_key]) > 100:
             log_result_route[audio_key] = f"<{audio_key} len={len(log_result_route[audio_key])}>"
         print(
             f"✓ Evaluation result from coordinator (Route Log): {log_result_route}")
-        # --- FIM DA MODIFICAÇÃO ---
-
-        # Retorna o resultado ORIGINAL completo para o frontend
         return jsonify(evaluation_result), status_code
 
     except Exception as e:
-        # Captura exceções que podem ocorrer *antes* da chamada ao coordenador
         print(f"❌ Top-level pronunciation evaluation error: {str(e)}")
         traceback.print_exc()
         return jsonify({
@@ -755,7 +800,8 @@ def options_gigi_game_generator():
 
 @app.route('/api/gigi/generate-game', methods=['POST'])
 @token_required
-def generate_gigi_game(user_id):
+@async_route
+async def generate_gigi_game(user_id):
     try:
         print("Received request for Gigi game generation")
         print(f"User ID: {user_id}")
@@ -763,82 +809,67 @@ def generate_gigi_game(user_id):
         data = request.get_json() or {}
         print(f"Request data: {data}")
 
-        # Extract and validate parameters from request
         game_type = data.get('game_type', "exercícios de pronúncia")
-
-        # Map difficulty values to ensure consistency
         difficulty_map = {
-            'advanced': 'avançado',
-            'medium': 'médio',
-            'beginner': 'iniciante'
+            'advanced': 'avançado', 'medium': 'médio', 'beginner': 'iniciante'
         }
-
-        # Get difficulty from request and map it, default to 'iniciante'
         requested_difficulty = data.get('difficulty', 'beginner')
         difficulty = difficulty_map.get(
             requested_difficulty.lower(), 'iniciante')
-
         print(
             f"Mapped difficulty from '{requested_difficulty}' to '{difficulty}'")
 
-        # Make sure the MCP coordinator is initialized
-        global game_generator, mcp_coordinator
-        if not game_generator or not mcp_coordinator:
-            initialize_services()
-            if not game_generator or not mcp_coordinator:
+        global mcp_coordinator, db  # Ensure db is accessible
+        if not mcp_coordinator:
+            # initialize_services() # Likely called by before_request
+            if not mcp_coordinator:
+                print("❌ Error: MCP Coordinator not initialized after check!")
                 return jsonify({
                     "success": False,
                     "message": "Não foi possível inicializar os serviços de jogo"
                 }), 500
 
-        # Use the game_designer to create a game with the correct difficulty
-        try:
-            game_data = mcp_coordinator.game_designer.create_game(
-                user_id=user_id,
-                difficulty=difficulty,
-                game_type=game_type
-            )
+        # --- Corrected Code using MCP ---
+        print("Creating message for game_designer agent...")
+        context = ModelContext()  # Create a context for this interaction
+        # Add user_id to context if needed by handlers/tools
+        context.set("user_id", user_id)
 
-            # Save the generated game to database
-            game_id = db.store_game(user_id, game_data)
+        game_message = Message(
+            from_agent="api_route",  # Identify the source
+            to_agent="game_designer",  # Target agent
+            tool="create_game",  # Tool to execute
+            params={  # Parameters for the tool
+                "user_id": user_id,
+                "difficulty": difficulty,
+                "game_type": game_type
+                # Add other necessary params based on your tool definition
+            }
+        )
 
-            # Return the game data to the client
-            return jsonify({
-                "success": True,
-                "game": {
-                    "game_id": str(game_id),
-                    "title": game_data.get("title", "Novo Jogo"),
-                    "difficulty": difficulty,
-                    "game_type": game_type,
-                    "content": game_data.get("content", [])
-                }
-            })
+        print(f"Processing message via MCP server: {game_message.tool}")
+        # Process the message through the MCP server
+        game_data = await mcp_coordinator.server.process_message(game_message, context)
 
-        except Exception as game_error:
-            print(f"Erro ao gerar jogo: {str(game_error)}")
-            traceback.print_exc()
+        # Check if the processing resulted in an error
+        if isinstance(game_data, dict) and game_data.get("error"):
+            raise Exception(f"MCP Error: {game_data['error']}")
 
-            # Fallback to game_generator
-            game_data = game_generator.create_game(
-                user_id=user_id,
-                difficulty=difficulty,
-                game_type=game_type
-            )
+        # Save the generated game to database
+        print(f"Game data received from MCP: {type(game_data)}")
+        game_id = db.store_game(user_id, game_data)  # Remove await here
 
-            # Save the fallback game
-            game_id = db.store_game(user_id, game_data)
-
-            # Return the fallback game data
-            return jsonify({
-                "success": True,
-                "game": {
-                    "game_id": str(game_id),
-                    "title": game_data.get("title", "Novo Jogo"),
-                    "difficulty": difficulty,
-                    "game_type": game_type,
-                    "content": game_data.get("content", [])
-                }
-            })
+        # Return the game data to the client
+        return jsonify({
+            "success": True,
+            "game": {
+                "game_id": str(game_id),
+                "title": game_data.get("title", "Novo Jogo"),
+                "difficulty": game_data.get("difficulty"),
+                "game_type": game_data.get("game_type"),
+                "content": game_data.get("exercises", [])
+            }
+        })
 
     except Exception as e:
         print(f"Erro na geração do jogo pela Gigi: {str(e)}")
@@ -952,27 +983,79 @@ def get_game_endpoint(game_id):
             transformed_exercise = {
                 "word": exercise.get("word", exercise.get("text", exercise.get("answer", exercise.get("starter", "")))),
                 "prompt": exercise.get("prompt", exercise.get("tip", exercise.get("clue", "Pronuncie esta palavra"))),
-                "hint": exercise.get("hint", exercise.get("tip", "Fale devagar")),
+                "hint": exercise.get("hint", exercise.get("tip", "Fale devagar e claramente")),
                 "visual_cue": exercise.get("visual_cue", exercise.get("word", "")),
+                "type": exercise.get("type", "pronunciation"),
                 "index": idx,
-                "total": len(raw_exercises)
+                "feedback": exercise.get("feedback", {})
             }
             exercises.append(transformed_exercise)
 
-        # Adicionar os exercícios transformados ao jogo
+        # Adicionar os exercícios transformados ao objeto do jogo
+        transformed_game["exercises"] = exercises
+        # Adicionar content como alias de exercises
         transformed_game["content"] = exercises
 
-        # Retornar os dados do jogo
+        print(f"Retornando jogo transformado com {len(exercises)} exercícios")
         return jsonify({
             "success": True,
             "game": transformed_game
         })
+
     except Exception as e:
-        print(f"Erro ao buscar jogo: {str(e)}")
+        print(f"❌ Erro ao buscar jogo: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": f"Error fetching game: {str(e)}"
+            "message": f"Failed to fetch game: {str(e)}"
+        }), 500
+
+
+@app.route('/api/user/journey', methods=['GET'])
+@token_required
+def get_user_journey(user_id):
+    """Endpoint para obter a jornada/progresso do usuário"""
+    try:
+        print(f"Buscando jogos completos para o usuário: {user_id}")
+        completed_games = db.get_completed_games(user_id)
+
+        # Contar jogos concluídos e calcular pontuação total
+        total_games = len(completed_games)
+        magic_points = total_games  # Cada jogo concluído vale 1 ponto de magia
+
+        # Calcular há quantos dias o usuário está jogando
+        first_game = None
+        if completed_games:
+            # Ordenar por data e pegar o primeiro jogo
+            sorted_games = sorted(completed_games,
+                                  key=lambda x: x.get('completed_at', x.get('created_at', '')))
+            first_game = sorted_games[0]
+
+        days_playing = 1  # Valor padrão
+        if first_game and 'completed_at' in first_game:
+            first_date = datetime.datetime.fromisoformat(
+                first_game['completed_at'].replace('Z', '+00:00'))
+            days_playing = (datetime.datetime.now() - first_date).days + 1
+
+        print(
+            f"Usuário {user_id}: {total_games} desafios, {magic_points} pontos de magia, {days_playing} dias de aventura")
+
+        return jsonify({
+            "success": True,
+            "journey": {
+                "completed_games": total_games,
+                "magic_points": magic_points,
+                "days_playing": days_playing,
+                "games": completed_games  # Incluir detalhes dos jogos se necessário
+            }
+        })
+
+    except Exception as e:
+        print(f"Erro ao buscar jornada do usuário: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"Failed to fetch user journey: {str(e)}"
         }), 500
 
 
@@ -980,56 +1063,113 @@ def get_game_endpoint(game_id):
 @token_required
 def finish_game(user_id):
     """
-    Finaliza um jogo chamando o MCP Coordinator.
+    Endpoint para finalizar uma sessão de jogo e salvar o progresso
     """
-    global mcp_coordinator  # Garantir acesso ao coordenador
     try:
-        print(f"========== FINALIZANDO JOGO (Rota -> Coordenador) ==========")
         data = request.json
+
+        if not data or 'session_id' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing session_id parameter'
+            }), 400
+
         session_id = data.get('session_id')
-        final_score = data.get('final_score', 0)  # Usar final_score
-        completion_option = data.get('completion_option', 'finish')
-        completed_manually = data.get('completed_manually', False)
-        generate_next = data.get('generate_next', False)
+        completion_option = data.get('completion_option', 'complete')
+        final_score = data.get('final_score', 0)
+        completed_manually = data.get('completed_manually', True)
 
         print(
-            f"Dados recebidos: session_id={session_id}, score={final_score}, option={completion_option}, generate_next={generate_next}")
+            f"Finalizando jogo: session_id={session_id}, option={completion_option}, score={final_score}")
 
-        if not session_id:
-            return jsonify({"success": False, "message": "ID da sessão não fornecido"}), 400
+        # Verificar se a sessão pertence ao usuário autenticado
+        session = db.get_session(session_id)
+        if not session:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            }), 404
 
-        # Verificar se o coordenador está inicializado
-        if not mcp_coordinator:
-            print("❌ Error: MCP Coordinator not initialized!")
-            return jsonify({"success": False, "message": "Erro interno: Coordenador não disponível"}), 500
+        if session.get('user_id') != user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized access to session'
+            }), 403
 
-        # Chamar o coordenador para finalizar
-        result = mcp_coordinator.finalize_session(
-            session_id=session_id,
-            user_id=user_id,
-            final_score=final_score,  # Passar final_score
-            completion_option=completion_option,
-            completed_manually=completed_manually,
-            generate_next=generate_next
-        )
+        # Atualizar o status da sessão no banco de dados
+        update_data = {
+            'completed': True,
+            'completion_status': completion_option,
+            'final_score': final_score,
+            'end_time': datetime.datetime.now().isoformat(),
+            'completed_manually': completed_manually
+        }
 
-        status_code = 200 if result.get("success") else 500
-        if not result.get("success"):
-            print(
-                f"❌ Falha ao finalizar jogo via coordenador: {result.get('message')}")
+        db.update_session(session_id, update_data)
 
-        print(f"========== FINALIZAÇÃO PROCESSADA (Retorno Coordenador) ==========")
-        return jsonify(result), status_code
+        # Atualizar o histórico do usuário
+        user = db.get_user_by_id(user_id)
+        if user:
+            # Obter ou inicializar o histórico
+            history = user.get('history', {})
+            if 'completed_sessions' not in history:
+                history['completed_sessions'] = []
+
+            # Criar resumo da sessão
+            session_summary = {
+                'session_id': session_id,
+                'game_id': session.get('game_id'),
+                'title': session.get('title', 'Jogo sem título'),
+                'completed_at': datetime.datetime.now().isoformat(),
+                'score': final_score,
+                'completion_type': completion_option,
+                'difficulty': session.get('difficulty', 'iniciante')
+            }
+
+            # Adicionar ao histórico
+            history['completed_sessions'].append(session_summary)
+
+            # Atualizar usuário
+            db.update_user(user_id, {'history': history})
+
+        return jsonify({
+            'success': True,
+            'message': 'Game session completed successfully',
+            'session_id': session_id
+        })
 
     except Exception as e:
-        print(f"❌ Erro na rota /api/game/finish: {str(e)}")
+        print(f"❌ Erro ao finalizar jogo: {str(e)}")
         traceback.print_exc()
         return jsonify({
-            "success": False,
-            "message": f"Erro interno na rota de finalização: {str(e)}"
+            'success': False,
+            'error': f'Error finishing game: {str(e)}'
         }), 500
 
 
 if __name__ == "__main__":
+    import uvicorn
+    import os
+    from asgiref.wsgi import WsgiToAsgi  # Import the adapter
+
+    # Get DEBUG setting from config or environment
+    try:
+        from config import DEBUG
+    except ImportError:
+        DEBUG = os.environ.get("FLASK_ENV") == "development" or os.environ.get(
+            "FLASK_DEBUG") == "1"
+        print(f"DEBUG setting fallback: {DEBUG}")
+
     port = int(os.environ.get('PORT', 5001))
-    app.run(debug=DEBUG, port=port, host='0.0.0.0')
+    print(f"Starting server with Uvicorn (via app.py) on port {port}...")
+
+    # Wrap the Flask WSGI app to make it ASGI compatible
+    asgi_app = WsgiToAsgi(app)
+
+    # Run the wrapped ASGI app with Uvicorn
+    uvicorn.run(
+        asgi_app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    )

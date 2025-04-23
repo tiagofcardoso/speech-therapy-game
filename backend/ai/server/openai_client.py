@@ -1,11 +1,12 @@
 import os
 import logging
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI  # Add AsyncOpenAI import
 
 logger = logging.getLogger(__name__)
 
 
 def create_openai_client(api_key=None):
+    """Creates a synchronous OpenAI client"""
     try:
         # Explicitly load environment variables
         from dotenv import load_dotenv
@@ -33,13 +34,28 @@ def create_openai_client(api_key=None):
         print(f"Using API key: {api_key[:8]}...")
 
         client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Use gpt-4o-mini which supports JSON response format
-            messages=[{"role": "user", "content": "Hello"}],
-            max_tokens=5
-        )
         logger.info("OpenAI client initialized successfully")
         return client
     except Exception as e:
         logger.error(f"Error initializing OpenAI client: {str(e)}")
+        return None
+
+
+def create_async_openai_client(api_key=None):
+    """Creates an asynchronous OpenAI client"""
+    try:
+        # Reuse API key loading logic
+        api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found")
+            return None
+
+        client = AsyncOpenAI(
+            api_key=api_key,
+            timeout=60.0  # Increased timeout for longer responses
+        )
+        logger.info("Async OpenAI client initialized successfully")
+        return client
+    except Exception as e:
+        logger.error(f"Error initializing async OpenAI client: {str(e)}")
         return None
