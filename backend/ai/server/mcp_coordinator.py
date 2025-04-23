@@ -232,6 +232,7 @@ class MCPSystem:
                 difficulty = message.params.get("difficulty", "iniciante")
                 game_type = message.params.get(
                     "game_type", "exercícios de pronúncia")
+                language = message.params.get("language", "pt-PT")
 
                 # Ensure we have required parameters
                 if not user_id:

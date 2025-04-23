@@ -28,9 +28,9 @@ class GameDesignerAgent(BaseAgent):
 
             # Obter resposta do modelo usando o cliente async
             completion = await self.client.chat.completions.create(
-                model="gpt-4-0125-preview",
+                model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "Você é um especialista em criar jogos educativos para terapia da fala."},
+                    {"role": "system", "content": "és um especialista em criar jogos educativos para terapia da fala."},
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"}

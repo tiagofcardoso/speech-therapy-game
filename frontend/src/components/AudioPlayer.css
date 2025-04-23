@@ -1,55 +1,62 @@
 .audio-player {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 8px 15px;
-    border-radius: 24px;
-    background-color: rgba(156, 39, 176, 0.1);
-    max-width: 240px;
-    margin: 8px auto;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    gap: 10px;
+    margin: 10px 0;
+    position: relative;
 }
 
 .play-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #4285f4;
+    color: white;
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    /* Aumentado de 42px */
-    height: 48px;
-    /* Aumentado de 42px */
-    border-radius: 50%;
-    background-color: #4CAF50;
-    /* Verde mais distinto */
-    color: white;
-    border: none;
     cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     transition: all 0.2s ease;
-    box-shadow: 0 3px 8px rgba(76, 175, 80, 0.5);
-    /* Sombra mais pronunciada */
     position: relative;
-    overflow: visible;
 }
 
-/* Adicionando triângulo de play com pseudo-elemento para reforçar a ideia de play */
-.play-button:not(.playing)::after {
+.play-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.play-button:disabled::after {
     content: '';
     position: absolute;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 12px 0 12px 18px;
-    /* Triângulo estilo "play" */
-    border-color: transparent transparent transparent white;
-    transform: translateX(2px);
-    /* Centraliza melhor */
-    opacity: 0.9;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    border: 2px solid #999;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
 }
 
-/* Remove o triângulo quando estiver tocando */
-.play-button.playing::after {
-    display: none;
+.play-button:hover:not(:disabled) {
+    background-color: #2a75f3;
+    transform: scale(1.05);
+}
+
+.play-button:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.play-button.playing {
+    background-color: #34a853;
+    animation: pulse 2s infinite;
+}
+
+.play-button.error {
+    background-color: #ea4335;
 }
 
 .play-button::before {
@@ -61,41 +68,38 @@
     bottom: -4px;
     border-radius: 50%;
     border: 3px solid #4CAF50;
-    /* Mesma cor do botão */
     opacity: 0.6;
-    animation: pulse 2s infinite;
 }
 
-.play-button:hover {
-    background-color: #388E3C;
-    /* Verde mais escuro no hover */
-    transform: scale(1.08);
+.play-button:not(.playing)::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 12px 0 12px 18px;
+    border-color: transparent transparent transparent white;
+    transform: translateX(2px);
+    opacity: 0.9;
 }
 
-.play-button.playing {
-    background-color: #F44336;
-    /* Vermelho quando estiver tocando - mais intuitivo */
+.play-button.playing::after {
+    display: none;
 }
 
-/* Estilo para os ícones SVG */
 .icon-svg {
     width: 24px;
-    /* Aumentado de 20px */
     height: 24px;
-    /* Aumentado de 20px */
     fill: currentColor;
     display: inline-block;
     vertical-align: middle;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
-    /* Sombra mais pronunciada */
 }
 
-/* Esconde o ícone SVG de play quando usamos o pseudo-elemento */
 .play-button:not(.playing) .icon-svg {
     opacity: 0;
 }
 
-/* Mostra apenas o ícone de pausa */
 .play-button.playing .icon-svg {
     opacity: 1;
     width: 20px;
@@ -150,19 +154,62 @@
 
 @keyframes pulse {
     0% {
-        transform: scale(0.95);
-        opacity: 0.5;
+        transform: scale(1);
     }
 
     50% {
-        transform: scale(1.05);
-        opacity: 0.3;
+        transform: scale(1.1);
     }
 
     100% {
-        transform: scale(0.95);
-        opacity: 0.5;
+        transform: scale(1);
     }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.audio-error {
+    display: flex;
+    align-items: center;
+    color: #ea4335;
+    font-size: 0.8rem;
+    gap: 5px;
+}
+
+.retry-button {
+    background: none;
+    border: none;
+    color: #4285f4;
+    cursor: pointer;
+    padding: 2px 5px;
+    font-size: 0.8rem;
+}
+
+.retry-button:hover {
+    color: #2a75f3;
+}
+
+.debug-button {
+    background-color: #f8f9fa;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    color: #5f6368;
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.audio-player-word-audio .play-button {
+    background-color: #4285f4;
+}
+
+.audio-player-feedback-audio .play-button {
+    background-color: #fbbc05;
 }
 
 .word-audio-player {

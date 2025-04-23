@@ -10,18 +10,17 @@ import datetime
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import logging
-import traceback  # Adicionar importação do traceback
-import time  # Adicionar importação do time
+import traceback
+import time
 import uuid
 import base64
 import tempfile
 import subprocess
-import asyncio  # Add asyncio import
-from asgiref.sync import async_to_sync  # Add this import
-from functools import wraps  # Add this import
-from functools import lru_cache  # Add lru_cache import
+import asyncio
+from asgiref.sync import async_to_sync
+from functools import wraps
+from functools import lru_cache
 from ai.agents.speech_evaluator_agent import SpeechEvaluatorAgent
-# Import app instance and JWT_SECRET_KEY from config
 from config import DEBUG, OPENAI_API_KEY, app, JWT_SECRET_KEY
 from bson import ObjectId
 from flask.json import JSONEncoder
@@ -32,7 +31,6 @@ from speech.recognition import recognize_speech
 from speech.synthesis import synthesize_speech, get_example_word_for_phoneme
 from speech.lipsync import LipsyncGenerator
 from ai.server.mcp_coordinator import MCPSystem
-# Import Message and ModelContext
 from ai.server.mcp_server import Message, ModelContext
 from ai.agents.game_designer_agent import GameDesignerAgent as GameGenerator
 from auth.auth_service import AuthService
@@ -46,16 +44,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Importar o blueprint API
-
-# Add project root to Python path
 if __name__ == "__main__":
     current_dir = Path(__file__).resolve().parent
-    # Navigate up to speech-therapy-game
     project_root = current_dir.parent.parent.parent
     sys.path.insert(0, str(project_root))
-
-# Add this decorator definition
 
 
 def async_route(f):
@@ -65,8 +57,6 @@ def async_route(f):
         return async_to_sync(f)(*args, **kwargs)
     return wrapper
 
-# Classe para codificar ObjectIds para JSON
-
 
 class CustomJSONEncoder(JSONEncoder):
     def default(self, obj):
@@ -75,30 +65,24 @@ class CustomJSONEncoder(JSONEncoder):
         return super().default(obj)
 
 
-# Load environment variables
 load_dotenv()
 
-# Check for essential configurations
 if not OPENAI_API_KEY:
     print("\n⚠️  WARNING: OPENAI_API_KEY not set in environment!")
     print("   The application will fail when calling OpenAI services.")
     print("   Set this in your .env file.\n")
 
-# Initialize Flask app
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Registrar o blueprint da API
 app.register_blueprint(api_bp, url_prefix='/api')
 
-# Configure CORS globalmente
 CORS(app,
      resources={r"/*": {"origins": "*"}},
      supports_credentials=True,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization"])
 
-# Configure CORS especificamente para rotas de autenticação
 CORS(app,
      resources={r"/api/auth/*": {"origins": "*"}},
      methods=["POST", "OPTIONS"],
@@ -117,17 +101,12 @@ def serve(path):
         return send_from_directory(app.static_folder, 'index.html')
 
 
-# Aplique o encoder personalizado ao Flask app
 app.json_encoder = CustomJSONEncoder
-
-# Simple ping endpoint to test the server
 
 
 @app.route('/api/ping', methods=['GET'])
 def ping():
     return jsonify({"message": "pong"})
-
-# Root endpoint
 
 
 @app.route('/', methods=['GET'])
@@ -148,39 +127,29 @@ def health_check():
     })
 
 
-# Initialize services
 auth_service = AuthService()
 db = DatabaseConnector()
 
-# Initialize global instances
 game_generator = None
 mcp_coordinator = None
 
-# Add this after initializing other services
 lipsync_generator = LipsyncGenerator()
-
-# Substitua qualquer inicialização direta do MCPCoordinator
 
 
 @app.before_request
 def initialize_services():
     global game_generator, mcp_coordinator, db
 
-    # Verificar se já estão inicializados
     if game_generator is None or mcp_coordinator is None:
         try:
-            # Inicializar serviços
             game_generator = GameGenerator()
-            # Passar o db_connector para o MCPSystem (Change MCPCoordinator to MCPSystem)
             mcp_coordinator = MCPSystem(
                 api_key=OPENAI_API_KEY, db_connector=db)
-            # Changed Coordinator to System
             print("MCP System initialized with database connection")
         except Exception as e:
             print(f"Error initializing services: {str(e)}")
 
 
-# Configure Sentry
 if os.environ.get('SENTRY_DSN'):
     sentry_sdk.init(
         dsn=os.environ.get('SENTRY_DSN'),
@@ -192,36 +161,22 @@ if os.environ.get('SENTRY_DSN'):
 else:
     print("Sentry monitoring disabled (no SENTRY_DSN provided)")
 
-# Adicione esta função antes das rotas de autenticação
-
 
 def generate_token(user_id):
     print(f"JWT_SECRET_KEY utilizada: {JWT_SECRET_KEY}")
-    """
-    Gera um token JWT para o usuário
-
-    Args:
-        user_id: ID do usuário
-
-    Returns:
-        str: Token JWT
-    """
     try:
-        # Defina o payload com user_id e timestamps
         payload = {
             'user_id': str(user_id),
             'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1),
             'iat': datetime.datetime.utcnow()
         }
 
-        # Use a chave secreta definida em config.py
         token = jwt.encode(
             payload,
-            JWT_SECRET_KEY,  # Use a constante do config.py
+            JWT_SECRET_KEY,
             algorithm='HS256'
         )
 
-        # Dependendo da versão do PyJWT, pode retornar bytes em vez de string
         if isinstance(token, bytes):
             return token.decode('utf-8')
         return token
@@ -229,16 +184,25 @@ def generate_token(user_id):
         print(f"Erro ao gerar token: {str(e)}")
         raise
 
-# Authentication routes
+
+def verify_token(token):
+    try:
+        # Handle case where token might be bytes
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
+
+        data = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        return data
+    except Exception as e:
+        print(f"Erro ao decodificar token: {str(e)}")
+        return None
 
 
 @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
 def login():
-    # Para depuração
     print("==== Recebida requisição de login ====")
     print(f"Método: {request.method}")
 
-    # Handle OPTIONS request for CORS
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -250,7 +214,7 @@ def login():
         data = request.get_json()
         print(f"Dados de login: {data}")
 
-        username = data.get('username')  # Espera username em vez de email
+        username = data.get('username')
         password = data.get('password')
 
         if not username or not password:
@@ -259,7 +223,6 @@ def login():
                 "message": "Username e senha são obrigatórios"
             }), 400
 
-        # Autenticar usuário com username
         user = db.authenticate_user(username, password)
 
         if not user:
@@ -268,7 +231,6 @@ def login():
                 "message": "Username ou senha inválidos"
             }), 401
 
-        # Gerar token JWT
         token = generate_token(user['_id'])
 
         return jsonify({
@@ -287,11 +249,9 @@ def login():
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
-    # Para depuração
     print("==== Recebida requisição de registro ====")
     print(f"Método: {request.method}")
 
-    # Handle OPTIONS request for CORS
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -303,14 +263,12 @@ def register():
         data = request.get_json()
         print(f"Dados de registro: {data}")
 
-        # Validação dos dados
         if not data.get('username') or not data.get('password') or not data.get('name'):
             return jsonify({
                 "success": False,
                 "message": "Nome, username e senha são obrigatórios"
             }), 400
 
-        # Verificar se username já existe
         if db.user_exists(data.get('username')):
             print(f"Usuário '{data.get('username')}' já existe")
             return jsonify({
@@ -318,10 +276,8 @@ def register():
                 "message": "Este nome de usuário já está em uso. Por favor, escolha outro."
             }), 409
 
-        # Criar novo usuário
         user_id = db.create_user(data)
 
-        # Gerar token JWT
         token = generate_token(user_id)
 
         return jsonify({
@@ -341,15 +297,11 @@ def register():
 @app.route('/api/auth/verify', methods=['GET'])
 @token_required
 def verify_auth(user_id):
-    # If we get here, the token is valid
     return jsonify({"success": True, "valid": True, "user_id": user_id}), 200
 
 
 @app.route('/api/auth/test-token', methods=['GET'])
 def test_token():
-    """
-    Rota para testar a decodificação de token
-    """
     auth_header = request.headers.get('Authorization')
     if not auth_header:
         return jsonify({'message': 'Token não encontrado no header'}), 401
@@ -357,11 +309,9 @@ def test_token():
     try:
         token = auth_header.split(" ")[1]
 
-        # Imprimir informações para debug
         print(f"Testando token: {token[:10]}...")
         print(f"Chave JWT: {JWT_SECRET_KEY[:5]}...")
 
-        # Tentar decodificar
         data = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
 
         return jsonify({
@@ -375,35 +325,28 @@ def test_token():
             'error': str(e)
         }), 401
 
-# User profile routes
-
 
 @app.route('/api/user/profile/<user_id>', methods=['GET'])
 @token_required
 def get_user_profile(user_id, requesting_user_id):
     try:
-        # Adicionar mais logs para depuração
         print(f"Fetching profile for user_id: {user_id}")
         print(f"Requesting user_id: {requesting_user_id}")
 
-        # Verificar se o usuário pode acessar este perfil
         if user_id != requesting_user_id:
             print(
                 f"Access denied: {requesting_user_id} trying to access {user_id}")
             return jsonify({"error": "Unauthorized access"}), 403
 
-        # CORREÇÃO: Usar db em vez de db_service
         user = db.get_user_by_id(user_id)
 
         if not user:
             print(f"User not found: {user_id}")
             return jsonify({"error": "User not found"}), 404
 
-        # Remover senha por segurança
         if "password" in user:
             del user["password"]
 
-        # Dados do perfil a retornar
         user_profile = {
             "name": user.get("name", ""),
             "age": user.get("age", 0),
@@ -421,13 +364,11 @@ def get_user_profile(user_id, requesting_user_id):
 @app.route('/api/user/profile/<user_id>', methods=['PUT'])
 @token_required
 def update_user_profile(user_id, requesting_user_id):
-    # Check if the requesting user is updating their own profile
     if user_id != requesting_user_id:
         return jsonify({"error": "Unauthorized access to update user profile"}), 403
 
     data = request.json
 
-    # Define what fields are allowed to be updated
     allowed_fields = ["name", "age"]
     update_data = {k: v for k, v in data.items() if k in allowed_fields}
 
@@ -440,8 +381,6 @@ def update_user_profile(user_id, requesting_user_id):
         return jsonify({"error": "Failed to update user profile"}), 500
 
     return jsonify({"success": True, "message": "Profile updated successfully"}), 200
-
-# Game routes
 
 
 @app.route('/api/start_game', methods=['POST'])
@@ -465,7 +404,6 @@ async def start_game(user_id):
 
         session_result = await mcp_coordinator.load_existing_game_session(user_id, game_id)
 
-        # Log the response structure
         print(f"Response structure: {json.dumps(session_result, indent=2)}")
 
         if not session_result.get("success"):
@@ -489,33 +427,27 @@ def submit_response(user_id):
     session_id = request.json.get('session_id')
     recognized_text = request.json.get('recognized_text')
 
-    # Get session from database
     session_data = db.get_session(session_id)
     if not session_data:
         return jsonify({"error": "Session not found"}), 404
 
-    # Verify the session belongs to the authenticated user
     if session_data.get("user_id") != user_id:
         return jsonify({"error": "Unauthorized access to session"}), 403
 
-    # Use MCP to evaluate the response
     evaluation_results = mcp_coordinator.process_response(
         session_data, recognized_text)
 
     if "session_complete" in evaluation_results and evaluation_results["session_complete"]:
-        # Calcular pontuação final
         responses = session_data.get("responses", [])
         total_score = sum(r.get("score", 0) for r in responses)
         exercises_count = len(session_data.get("exercises", []))
 
-        # Evitar divisão por zero
         if exercises_count > 0:
             final_score_percentage = (
                 total_score / (exercises_count * 10)) * 100
         else:
             final_score_percentage = 0
 
-        # Verificar se atingiu o mínimo para o nível
         difficulty = session_data.get("difficulty", "iniciante")
         completion_threshold = {
             "iniciante": 80,
@@ -523,10 +455,8 @@ def submit_response(user_id):
             "avançado": 100
         }.get(difficulty, 80)
 
-        # Definir se o jogo foi concluído com base na pontuação mínima
         is_completed = final_score_percentage >= completion_threshold
 
-        # Atualizar no banco de dados
         db.update_session(session_id, {
             "completed": is_completed,
             "final_score": final_score_percentage,
@@ -534,7 +464,6 @@ def submit_response(user_id):
             "end_time": datetime.datetime.now().isoformat()
         })
 
-        # Adicionar ao histórico do usuário
         user = db.get_user(user_id)
         if user:
             history = user.get("history", {})
@@ -552,7 +481,6 @@ def submit_response(user_id):
             history["completed_sessions"].append(session_summary)
             db.update_user(user_id, {"history": history})
 
-        # Retornar resultado com informação sobre conclusão
         return jsonify({
             "session_complete": True,
             "feedback": evaluation_results.get("feedback", {}),
@@ -561,9 +489,6 @@ def submit_response(user_id):
             "completion_status": "completed" if is_completed else "need_improvement",
             "completion_threshold": completion_threshold
         }), 200
-
-    # Resto da função para processar respostas normais...
-    # ...
 
 
 @app.route('/api/recognize', methods=['POST'])
@@ -579,13 +504,47 @@ def recognize(user_id):
 
 @app.route('/api/synthesize', methods=['POST'])
 @token_required
-def synthesize(user_id):
-    text = request.json.get('text')
-    if not text:
-        return jsonify({'error': 'No text provided'}), 400
+def synthesize_with_polly(user_id):
+    """Endpoint para sintetizar fala usando AWS Polly"""
+    try:
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({'error': 'No text provided'}), 400
 
-    audio = synthesize_speech(text)
-    return jsonify({'audio': audio}), 200
+        text = data.get('text', '').strip()
+        if not text:
+            return jsonify({'error': 'Empty text'}), 400
+
+        print(f"📝 Texto para síntese com Polly: '{text}'")
+
+        # Create voice settings using voice_id if provided
+        voice_settings = {
+            'voice_id': data.get('voice_id', 'Ines'),
+            'engine': data.get('engine', 'standard'),
+            'language_code': data.get('language_code', 'pt-PT'),
+            'sample_rate': data.get('sample_rate', '22050')
+        }
+
+        # Use AWS Polly via the synthesis module
+        audio_data = synthesize_speech(text, voice_settings)
+
+        if not audio_data:
+            return jsonify({'error': 'Failed to generate audio with AWS Polly'}), 500
+
+        # Fix for bytes serialization issue - ensure we have string data
+        if isinstance(audio_data, bytes):
+            audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+        else:
+            # If it's already a string, use it directly
+            audio_b64 = audio_data
+
+        print(f"✅ Áudio Polly gerado: {len(audio_b64)} caracteres")
+
+        return jsonify({'success': True, 'audio': audio_b64})
+    except Exception as e:
+        print(f"❌ Erro na síntese com Polly: {str(e)}")
+        traceback.print_exc()
+        return jsonify({'error': f'Synthesis error: {str(e)}'}), 500
 
 
 @app.route('/api/synthesize-speech', methods=['POST'])
@@ -597,30 +556,37 @@ def synthesize_speech_endpoint():
 
         if not data or 'text' not in data:
             print("❌ Dados de entrada inválidos")
-            return jsonify({'success': False, 'error': 'Missing text parameter'}), 400
+            return Response(
+                json.dumps(
+                    {'success': False, 'error': 'Missing text parameter'}),
+                mimetype='application/json',
+                status=400
+            )
 
         text = data.get('text', '').strip()
         if not text:
             print("❌ Texto vazio")
-            return jsonify({'success': False, 'error': 'Empty text'}), 400
+            return Response(
+                json.dumps({'success': False, 'error': 'Empty text'}),
+                mimetype='application/json',
+                status=400
+            )
 
         print(f"📝 Texto para síntese: '{text}'")
 
-        # Usar gTTS diretamente aqui para evitar falhas na função externa
-        from gtts import gTTS
-        import io
-
-        # Gerar áudio diretamente
         try:
-            mp3_io = io.BytesIO()
-            tts = gTTS(text=text, lang='pt', slow=False)
-            tts.write_to_fp(mp3_io)
-            mp3_io.seek(0)
-            audio_bytes = mp3_io.read()
+            from gtts import gTTS
+            import io
 
-            # Verificar se o áudio foi gerado com sucesso
-            if not audio_bytes or len(audio_bytes) < 100:
-                print("❌ Falha ao gerar áudio - bytes insuficientes")
+            mp3_fp = io.BytesIO()
+            tts = gTTS(text=text, lang='pt', slow=False)
+            tts.write_to_fp(mp3_fp)
+            mp3_fp.seek(0)
+
+            audio_bytes = mp3_fp.read()
+
+            if not audio_bytes:
+                print("❌ Falha ao gerar áudio - nenhum dado retornado")
                 return Response(
                     json.dumps(
                         {'success': False, 'error': 'Failed to generate audio'}),
@@ -628,20 +594,18 @@ def synthesize_speech_endpoint():
                     status=500
                 )
 
-            # Codificar em base64 e converter para string
             audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
             print(
-                f"✅ Áudio gerado: {len(audio_bytes)} bytes, Base64: {len(audio_b64)} caracteres")
+                f"✅ Áudio gerado com sucesso: {len(audio_bytes)} bytes ({len(audio_b64)} caracteres em base64)")
 
-            # Criar resposta sem usar jsonify
-            response_data = json.dumps(
-                {'success': True, 'audio_data': audio_b64})
+            result = {'success': True, 'audio_data': audio_b64}
+            json_str = json.dumps(result)
+
             return Response(
-                response_data,
+                json_str,
                 mimetype='application/json',
                 status=200
             )
-
         except Exception as e:
             print(f"❌ Erro interno de síntese: {str(e)}")
             traceback.print_exc()
@@ -651,7 +615,6 @@ def synthesize_speech_endpoint():
                 mimetype='application/json',
                 status=500
             )
-
     except Exception as e:
         print(f"❌ Erro geral no endpoint: {str(e)}")
         traceback.print_exc()
@@ -666,7 +629,6 @@ def synthesize_speech_endpoint():
 @app.route('/api/tts-simple', methods=['POST', 'OPTIONS'])
 def simple_tts_endpoint():
     """Endpoint simplificado para síntese de fala"""
-    # Tratar requisições OPTIONS para CORS
     if request.method == 'OPTIONS':
         response = Response('', 200)
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -688,27 +650,22 @@ def simple_tts_endpoint():
 
         print(f"Texto para TTS simples: '{text}'")
 
-        # Usar gTTS
         from gtts import gTTS
         import io
 
-        # Criar buffer e gerar áudio
         mp3_fp = io.BytesIO()
         tts = gTTS(text=text, lang='pt')
         tts.write_to_fp(mp3_fp)
         mp3_fp.seek(0)
 
-        # Codificar para base64
         audio_b64 = base64.b64encode(mp3_fp.read()).decode('utf-8')
         print(f"TTS simples: Áudio gerado com {len(audio_b64)} caracteres")
 
-        # Resposta direta sem usar jsonify
         return Response(
             '{"success":true,"audio_data":"' + audio_b64 + '"}',
             mimetype='application/json',
             status=200
         )
-
     except Exception as e:
         print(f"❌ Erro no TTS simples: {str(e)}")
         traceback.print_exc()
@@ -723,9 +680,10 @@ def simple_tts_endpoint():
 @token_required
 @async_route
 async def evaluate_pronunciation(user_id):
+    """Endpoint para avaliar a pronúncia do usuário"""
     try:
         if 'audio' not in request.files:
-            print("❌ Error: No audio file in request")
+            print("❌ Nenhum arquivo de áudio na requisição")
             return jsonify({
                 "success": False,
                 "message": "No audio file provided",
@@ -733,158 +691,232 @@ async def evaluate_pronunciation(user_id):
             }), 400
 
         audio_file = request.files['audio']
-        expected_word = request.form.get('expected_word')
+        expected_word = request.form.get('expected_word', '').strip()
         session_id = request.form.get('session_id')
 
-        # Validação do expected_word
-        if not expected_word or expected_word.strip() == '':
-            print("❌ Error: No expected word provided")
+        if not expected_word:
+            print("❌ Palavra esperada não fornecida")
             return jsonify({
                 "success": False,
                 "message": "Expected word not provided",
                 "error_code": "NO_EXPECTED_WORD"
             }), 400
 
-        # Log da chamada
-        print(f"Routing pronunciation evaluation to MCP Coordinator:")
+        print(f"📊 Avaliando pronúncia:")
         print(
-            f"- Audio file: {audio_file.filename} ({audio_file.content_type})")
-        print(f"- Expected word: '{expected_word}'")
-        print(f"- User ID: {user_id}")
+            f"- Arquivo de áudio: {audio_file.filename} ({audio_file.content_type})")
+        print(f"- Palavra esperada: '{expected_word}'")
+        print(f"- ID do usuário: {user_id}")
         if session_id:
-            print(f"- Session ID: {session_id}")
+            print(f"- ID da sessão: {session_id}")
 
-        # Agora podemos usar await com a função assíncrona
-        evaluation_result = await mcp_coordinator.evaluate_pronunciation(
-            audio_file=audio_file,
-            expected_word=expected_word,
-            user_id=user_id,
-            session_id=session_id
-        )
+        audio_file.seek(0, os.SEEK_END)
+        file_size = audio_file.tell()
+        audio_file.seek(0)
 
-        # Resto do código permanece igual...
-        status_code = 200 if evaluation_result.get("success", False) else 500
-        if not evaluation_result.get("success", False) and status_code == 500:
+        print(f"- Tamanho do arquivo: {file_size} bytes")
+        if file_size < 100:
+            print("❌ Arquivo de áudio muito pequeno")
+            return jsonify({
+                "success": False,
+                "message": "Audio file is too small",
+                "error_code": "SMALL_AUDIO"
+            }), 400
+
+        try:
+            evaluation_result = await mcp_coordinator.evaluate_pronunciation(
+                audio_file=audio_file,
+                expected_word=expected_word,
+                user_id=user_id,
+                session_id=session_id
+            )
+
+            if not evaluation_result:
+                print("❌ Resultado da avaliação vazio")
+                return jsonify({
+                    "success": False,
+                    "message": "Empty evaluation result from coordinator",
+                    "error_code": "EMPTY_RESULT"
+                }), 500
+
+            log_result = evaluation_result.copy() if isinstance(
+                evaluation_result, dict) else {"error": "Non-dict result"}
+
+            if "audio_feedback" in log_result and isinstance(log_result["audio_feedback"], str):
+                audio_len = len(log_result["audio_feedback"])
+                log_result["audio_feedback"] = f"<audio_data: {audio_len} chars>"
+
             print(
-                f"❌ Evaluation failed within coordinator: {evaluation_result.get('message')}")
+                f"✅ Resultado da avaliação: {json.dumps(log_result, indent=2)}")
 
-        # Mascaramento do log
-        log_result_route = evaluation_result.copy()
-        audio_key = "audio_feedback"
-        if audio_key in log_result_route and isinstance(log_result_route[audio_key], str) and len(log_result_route[audio_key]) > 100:
-            log_result_route[audio_key] = f"<{audio_key} len={len(log_result_route[audio_key])}>"
-        print(
-            f"✓ Evaluation result from coordinator (Route Log): {log_result_route}")
-        return jsonify(evaluation_result), status_code
+            if not evaluation_result.get("audio_feedback") and evaluation_result.get("feedback"):
+                feedback_text = evaluation_result.get("feedback")
+                print(f"🔊 Gerando áudio de feedback para: '{feedback_text}'")
+                try:
+                    from gtts import gTTS
+                    import io
+
+                    audio_io = io.BytesIO()
+                    tts = gTTS(text=feedback_text, lang='pt', slow=False)
+                    tts.write_to_fp(audio_io)
+                    audio_io.seek(0)
+
+                    audio_bytes = audio_io.read()
+                    evaluation_result["audio_feedback"] = base64.b64encode(
+                        audio_bytes).decode('utf-8')
+                    print(
+                        f"✅ Áudio de feedback gerado: {len(evaluation_result['audio_feedback'])} caracteres")
+                except Exception as tts_error:
+                    print(
+                        f"⚠️ Erro ao gerar áudio de feedback: {str(tts_error)}")
+
+            status_code = 200 if evaluation_result.get("success") else 500
+            return jsonify(evaluation_result), status_code
+
+        except Exception as coord_error:
+            print(f"❌ Erro ao chamar o coordenador: {str(coord_error)}")
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "message": f"Coordinator error: {str(coord_error)}",
+                "error_code": "COORDINATOR_ERROR"
+            }), 500
 
     except Exception as e:
-        print(f"❌ Top-level pronunciation evaluation error: {str(e)}")
+        print(f"❌ Erro geral na avaliação de pronúncia: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": f"Unexpected error in evaluation endpoint: {str(e)}",
+            "message": f"Unexpected error: {str(e)}",
             "error_code": "ENDPOINT_ERROR"
         }), 500
 
 
-@app.route('/api/gigi/generate-game', methods=['OPTIONS'])
-def options_gigi_game_generator():
-    """Endpoint para lidar com requisições OPTIONS para CORS"""
-    response = jsonify({'status': 'ok'})
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers',
-                         'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    return response
-
-
 @app.route('/api/gigi/generate-game', methods=['POST'])
 @token_required
-@async_route
-async def generate_gigi_game(user_id):
+def gigi_game_post(user_id):
+    """Handler para requisições POST no endpoint de geração de jogos Gigi"""
     try:
-        print("Received request for Gigi game generation")
-        print(f"User ID: {user_id}")
+        print(f"✅ Iniciando geração de jogo via Gigi para usuário: {user_id}")
 
+        # Obter parâmetros da requisição
         data = request.get_json() or {}
-        print(f"Request data: {data}")
+        print(f"📝 Dados da requisição: {data}")
 
+        # Mapear dificuldade
         game_type = data.get('game_type', "exercícios de pronúncia")
+
         difficulty_map = {
-            'advanced': 'avançado', 'medium': 'médio', 'beginner': 'iniciante'
+            'advanced': 'avançado',
+            'medium': 'médio',
+            'beginner': 'iniciante'
         }
         requested_difficulty = data.get('difficulty', 'beginner')
         difficulty = difficulty_map.get(
             requested_difficulty.lower(), 'iniciante')
+
         print(
-            f"Mapped difficulty from '{requested_difficulty}' to '{difficulty}'")
+            f"🔄 Mapeando dificuldade: '{requested_difficulty}' → '{difficulty}'")
 
-        global mcp_coordinator, db  # Ensure db is accessible
+        # Verificar inicialização do MCP
+        global mcp_coordinator
         if not mcp_coordinator:
-            # initialize_services() # Likely called by before_request
-            if not mcp_coordinator:
-                print("❌ Error: MCP Coordinator not initialized after check!")
-                return jsonify({
+            print("❌ MCP Coordinator não inicializado!")
+            return jsonify({
+                "success": False,
+                "message": "Sistema de geração de jogos não disponível no momento."
+            }), 500
+
+        # Criar uma função aninhada para processar a requisição de forma assíncrona
+        @async_to_sync
+        async def process_game_request():
+            try:
+                # Set a shorter timeout for OpenAI request to ensure request doesn't hang too long
+                import asyncio
+                print("⏱️ Configurando timeout para criação de jogo: 40 segundos")
+
+                # Process request with timeout
+                try:
+                    # Create a task with timeout
+                    game_task = asyncio.create_task(generate_game_with_mcp())
+                    game_data = await asyncio.wait_for(game_task, timeout=40.0)
+                except asyncio.TimeoutError:
+                    print("⏰ Timeout na geração do jogo após 40 segundos")
+                    return {
+                        "success": False,
+                        "message": "A geração do jogo excedeu o tempo limite. Por favor, tente novamente."
+                    }
+
+                # Verificar se há erros
+                if isinstance(game_data, dict) and "error" in game_data:
+                    raise Exception(f"Erro do MCP: {game_data['error']}")
+
+                # Salvar jogo no banco de dados
+                print(f"💾 Salvando jogo gerado no banco de dados")
+                game_id = db.store_game(user_id, game_data)
+
+                # Retornar dados do jogo
+                return {
+                    "success": True,
+                    "game": {
+                        "game_id": str(game_id),
+                        "title": game_data.get("title", "Novo Jogo"),
+                        "difficulty": game_data.get("difficulty", difficulty),
+                        "game_type": game_data.get("game_type", game_type),
+                        "content": game_data.get("exercises", [])
+                    }
+                }
+            except Exception as inner_error:
+                print(
+                    f"❌ Erro ao processar solicitação de jogo: {str(inner_error)}")
+                traceback.print_exc()
+                return {
                     "success": False,
-                    "message": "Não foi possível inicializar os serviços de jogo"
-                }), 500
+                    "message": f"Falha na geração do jogo: {str(inner_error)}"
+                }
 
-        # --- Corrected Code using MCP ---
-        print("Creating message for game_designer agent...")
-        context = ModelContext()  # Create a context for this interaction
-        # Add user_id to context if needed by handlers/tools
-        context.set("user_id", user_id)
+        async def generate_game_with_mcp():
+            # Preparar contexto e mensagem para o agente de design de jogos
+            context = ModelContext()
+            context.set("user_id", user_id)
 
-        game_message = Message(
-            from_agent="api_route",  # Identify the source
-            to_agent="game_designer",  # Target agent
-            tool="create_game",  # Tool to execute
-            params={  # Parameters for the tool
-                "user_id": user_id,
-                "difficulty": difficulty,
-                "game_type": game_type
-                # Add other necessary params based on your tool definition
-            }
-        )
+            # Criar mensagem para o MCP
+            game_message = Message(
+                from_agent="api",
+                to_agent="game_designer",
+                tool="create_game",
+                params={
+                    "user_id": user_id,
+                    "difficulty": difficulty,
+                    "game_type": game_type
+                }
+            )
 
-        print(f"Processing message via MCP server: {game_message.tool}")
-        # Process the message through the MCP server
-        game_data = await mcp_coordinator.server.process_message(game_message, context)
+            # Enviar solicitação para o MCP e aguardar resposta
+            print(f"🔄 Processando mensagem: {game_message.tool}")
+            return await mcp_coordinator.server.process_message(game_message, context)
 
-        # Check if the processing resulted in an error
-        if isinstance(game_data, dict) and game_data.get("error"):
-            raise Exception(f"MCP Error: {game_data['error']}")
+        # Executar a função aninhada
+        result = process_game_request()
 
-        # Save the generated game to database
-        print(f"Game data received from MCP: {type(game_data)}")
-        game_id = db.store_game(user_id, game_data)  # Remove await here
-
-        # Return the game data to the client
-        return jsonify({
-            "success": True,
-            "game": {
-                "game_id": str(game_id),
-                "title": game_data.get("title", "Novo Jogo"),
-                "difficulty": game_data.get("difficulty"),
-                "game_type": game_data.get("game_type"),
-                "content": game_data.get("exercises", [])
-            }
-        })
+        # Verificar sucesso da operação
+        if result.get("success"):
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
 
     except Exception as e:
-        print(f"Erro na geração do jogo pela Gigi: {str(e)}")
+        print(f"❌ Erro global na rota /api/gigi/generate-game: {str(e)}")
         traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": f"Falha ao gerar jogo: {str(e)}"
+            "message": f"Erro no servidor: {str(e)}"
         }), 500
 
 
 @app.route('/api/games/<game_id>', methods=['GET', 'OPTIONS'])
 def get_game_endpoint(game_id):
-    """
-    Endpoint para obter os detalhes de um jogo específico
-    """
+    """Endpoint para obter os detalhes de um jogo específico"""
     # Tratar requisições OPTIONS para CORS
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
@@ -904,7 +936,7 @@ def get_game_endpoint(game_id):
         token = auth_header.split(" ")[1] if len(
             auth_header.split(" ")) > 1 else auth_header
         print(f"Token recebido: {token[:15]}...")
-        print(f"Decodificando token com chave: {JWT_SECRET_KEY[:10]}...")
+
         data = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
         user_id = data.get('user_id')
 
@@ -928,17 +960,60 @@ def get_game_endpoint(game_id):
     try:
         print(f"Buscando jogo com ID: {game_id} para usuário: {user_id}")
 
-        # Buscar o jogo no banco de dados
+        # Verificar o formato do ID do jogo (pode ser string ou ObjectId)
+        try:
+            # Tentar converter para ObjectId (formato MongoDB)
+            from bson.objectid import ObjectId
+            if not ObjectId.is_valid(game_id):
+                print(f"❌ ID de jogo inválido: {game_id}")
+                return jsonify({
+                    "success": False,
+                    "message": "Invalid game ID format"
+                }), 400
+        except Exception as id_error:
+            print(f"Erro na validação do ID: {str(id_error)}")
+            # Continuar mesmo com erro, pode ser um formato válido diferente
+
+        # Adicionar logs detalhados para depuração
+        print(f"🔍 Buscando jogo no banco de dados com ID: {game_id}")
+
+        # Buscar o jogo no banco de dados - corrigir aqui se o método db.get_game não estiver funcionando
         game = db.get_game(game_id)
 
+        # Se o jogo não for encontrado, tentar uma busca alternativa (se existir um método diferente)
         if not game:
-            print(f"Jogo não encontrado: {game_id}")
+            print(
+                f"⚠️ Jogo não encontrado usando db.get_game(). Tentando métodos alternativos...")
+            # Exemplo: tentar buscar usando o método find_one diretamente
+            try:
+                from bson.objectid import ObjectId
+                game = db.games_collection.find_one({"_id": ObjectId(game_id)})
+                if game:
+                    print(f"✅ Jogo encontrado usando consulta direta ao MongoDB")
+            except Exception as alt_error:
+                print(f"❌ Erro na busca alternativa: {str(alt_error)}")
+
+        # Se ainda não encontrou o jogo, retornar erro
+        if not game:
+            print(f"❌ Jogo não encontrado: {game_id}")
             return jsonify({
                 "success": False,
                 "message": "Game not found"
             }), 404
 
-        print(f"Jogo encontrado: {game.get('title', 'Sem título')}")
+        print(f"✅ Jogo encontrado: {game.get('title', 'Sem título')}")
+        print(f"🔍 Estrutura do jogo: {type(game)}")
+
+        # Dump the game structure for debugging
+        import json
+        try:
+            # Convert ObjectId to string for JSON serialization
+            game_dump = {k: str(v) if isinstance(v, ObjectId)
+                         else v for k, v in game.items()}
+            print(
+                f"Estrutura completa do jogo: {json.dumps(game_dump, indent=2)}")
+        except Exception as dump_error:
+            print(f"Erro ao fazer dump do jogo: {str(dump_error)}")
 
         # Obter o conteúdo que pode estar em diferentes formatos
         content = game.get("content", {})
@@ -972,12 +1047,16 @@ def get_game_endpoint(game_id):
         else:
             raw_exercises = []
 
-        print(f"Encontrados {len(raw_exercises)} exercícios")
+        print(f"🔍 Encontrados {len(raw_exercises)} exercícios")
+
+        # Log primeiro exercício para debug
+        if raw_exercises and len(raw_exercises) > 0:
+            print(f"Primeiro exercício: {raw_exercises[0]}")
 
         # Transformar os exercícios em um formato consistente
         for idx, exercise in enumerate(raw_exercises):
             if not isinstance(exercise, dict):
-                print(f"Pulando exercício não-dict: {exercise}")
+                print(f"⚠️ Pulando exercício não-dict: {exercise}")
                 continue
 
             transformed_exercise = {
@@ -996,7 +1075,8 @@ def get_game_endpoint(game_id):
         # Adicionar content como alias de exercises
         transformed_game["content"] = exercises
 
-        print(f"Retornando jogo transformado com {len(exercises)} exercícios")
+        print(
+            f"✅ Retornando jogo transformado com {len(exercises)} exercícios")
         return jsonify({
             "success": True,
             "game": transformed_game
@@ -1011,162 +1091,156 @@ def get_game_endpoint(game_id):
         }), 500
 
 
-@app.route('/api/user/journey', methods=['GET'])
-@token_required
-def get_user_journey(user_id):
-    """Endpoint para obter a jornada/progresso do usuário"""
+@app.route('/api/game/finish', methods=['POST', 'OPTIONS'])
+def finish_game_handler():
+    """Endpoint for finishing a game and recording its completion"""
+    # Handle OPTIONS requests for CORS without authentication
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers',
+                             'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+
+    # For POST requests, extract token and authenticate
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({"success": False, "message": "No authorization header provided"}), 401
+
     try:
-        print(f"Buscando jogos completos para o usuário: {user_id}")
-        completed_games = db.get_completed_games(user_id)
+        # Extract and validate token
+        token = auth_header.split(" ")[1] if len(
+            auth_header.split(" ")) > 1 else auth_header
+        token_data = verify_token(token)
 
-        # Contar jogos concluídos e calcular pontuação total
-        total_games = len(completed_games)
-        magic_points = total_games  # Cada jogo concluído vale 1 ponto de magia
+        if not token_data or 'user_id' not in token_data:
+            return jsonify({"success": False, "message": "Invalid token"}), 401
 
-        # Calcular há quantos dias o usuário está jogando
-        first_game = None
-        if completed_games:
-            # Ordenar por data e pegar o primeiro jogo
-            sorted_games = sorted(completed_games,
-                                  key=lambda x: x.get('completed_at', x.get('created_at', '')))
-            first_game = sorted_games[0]
+        user_id = token_data['user_id']
 
-        days_playing = 1  # Valor padrão
-        if first_game and 'completed_at' in first_game:
-            first_date = datetime.datetime.fromisoformat(
-                first_game['completed_at'].replace('Z', '+00:00'))
-            days_playing = (datetime.datetime.now() - first_date).days + 1
+        # Now process the game completion
+        try:
+            print("🎮 Processing game completion")
 
-        print(
-            f"Usuário {user_id}: {total_games} desafios, {magic_points} pontos de magia, {days_playing} dias de aventura")
+            # Get request data
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "message": "No data provided"}), 400
 
-        return jsonify({
-            "success": True,
-            "journey": {
-                "completed_games": total_games,
-                "magic_points": magic_points,
-                "days_playing": days_playing,
-                "games": completed_games  # Incluir detalhes dos jogos se necessário
-            }
-        })
+            # Extract necessary data
+            session_id = data.get('session_id')
+            if not session_id:
+                return jsonify({"success": False, "message": "No session_id provided"}), 400
 
-    except Exception as e:
-        print(f"Erro ao buscar jornada do usuário: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "message": f"Failed to fetch user journey: {str(e)}"
-        }), 500
+            # Get session data
+            session_data = db.get_session(session_id)
+            if not session_data:
+                print(f"❌ Session not found: {session_id}")
+                return jsonify({"success": False, "message": "Session not found"}), 404
 
+            # Verify the user is authorized for this session
+            session_user_id = session_data.get('user_id')
+            if session_user_id and str(session_user_id) != str(user_id):
+                print(
+                    f"❌ Unauthorized user: {user_id} trying to complete session for {session_user_id}")
+                return jsonify({"success": False, "message": "Unauthorized access to session"}), 403
 
-@app.route('/api/game/finish', methods=['POST'])
-@token_required
-def finish_game(user_id):
-    """
-    Endpoint para finalizar uma sessão de jogo e salvar o progresso
-    """
-    try:
-        data = request.json
+            print(f"✅ Session data validated: {session_id} for user {user_id}")
 
-        if not data or 'session_id' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'Missing session_id parameter'
-            }), 400
+            # Get game data
+            game_id = session_data.get('game_id')
+            if not game_id:
+                print(f"❌ Game ID not found in session: {session_id}")
+                return jsonify({"success": False, "message": "Game ID not found in session"}), 400
 
-        session_id = data.get('session_id')
-        completion_option = data.get('completion_option', 'complete')
-        final_score = data.get('final_score', 0)
-        completed_manually = data.get('completed_manually', True)
+            # Extract additional parameters
+            final_score = data.get('final_score', 0)
+            completion_option = data.get('completion_option', 'complete')
 
-        print(
-            f"Finalizando jogo: session_id={session_id}, option={completion_option}, score={final_score}")
+            print(
+                f"📊 Finishing game: game_id={game_id}, score={final_score}, option={completion_option}")
 
-        # Verificar se a sessão pertence ao usuário autenticado
-        session = db.get_session(session_id)
-        if not session:
-            return jsonify({
-                'success': False,
-                'error': 'Session not found'
-            }), 404
-
-        if session.get('user_id') != user_id:
-            return jsonify({
-                'success': False,
-                'error': 'Unauthorized access to session'
-            }), 403
-
-        # Atualizar o status da sessão no banco de dados
-        update_data = {
-            'completed': True,
-            'completion_status': completion_option,
-            'final_score': final_score,
-            'end_time': datetime.datetime.now().isoformat(),
-            'completed_manually': completed_manually
-        }
-
-        db.update_session(session_id, update_data)
-
-        # Atualizar o histórico do usuário
-        user = db.get_user_by_id(user_id)
-        if user:
-            # Obter ou inicializar o histórico
-            history = user.get('history', {})
-            if 'completed_sessions' not in history:
-                history['completed_sessions'] = []
-
-            # Criar resumo da sessão
-            session_summary = {
-                'session_id': session_id,
-                'game_id': session.get('game_id'),
-                'title': session.get('title', 'Jogo sem título'),
-                'completed_at': datetime.datetime.now().isoformat(),
-                'score': final_score,
-                'completion_type': completion_option,
-                'difficulty': session.get('difficulty', 'iniciante')
+            # Update session
+            session_update = {
+                "completed": True,
+                "end_time": datetime.datetime.now().isoformat(),
+                "final_score": final_score,
+                "completion_option": completion_option
             }
 
-            # Adicionar ao histórico
-            history['completed_sessions'].append(session_summary)
+            session_success = db.update_session(session_id, session_update)
+            if not session_success:
+                print(f"⚠️ Warning: Failed to update session {session_id}")
 
-            # Atualizar usuário
-            db.update_user(user_id, {'history': history})
+            # Update game
+            game_update = {
+                "completed": True,
+                "completed_at": datetime.datetime.now().isoformat(),
+                "final_score": final_score
+            }
 
-        return jsonify({
-            'success': True,
-            'message': 'Game session completed successfully',
-            'session_id': session_id
-        })
+            game_success = db.update_game(game_id, game_update)
+            if not game_success:
+                print(f"⚠️ Warning: Failed to update game {game_id}")
 
-    except Exception as e:
-        print(f"❌ Erro ao finalizar jogo: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Error finishing game: {str(e)}'
-        }), 500
+            # Add to user history
+            history_entry = {
+                "session_id": session_id,
+                "game_id": str(game_id),
+                "completed_at": datetime.datetime.now().isoformat(),
+                "score": final_score,
+                "difficulty": session_data.get("difficulty", "iniciante"),
+                "game_type": session_data.get("game_type", "exercícios de pronúncia"),
+                "completion_option": completion_option
+            }
+
+            history_success = db.add_to_user_history(user_id, history_entry)
+            if not history_success:
+                print(
+                    f"⚠️ Warning: Failed to update user history for {user_id}")
+
+            print(f"✅ Game successfully completed: {game_id}")
+
+            # Return success response
+            return jsonify({
+                "success": True,
+                "message": "Game completed successfully",
+                "game_id": str(game_id),
+                "session_id": session_id,
+                "final_score": final_score
+            })
+
+        except Exception as e:
+            print(f"❌ Error completing game: {str(e)}")
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "message": f"Error completing game: {str(e)}"
+            }), 500
+
+    except Exception as auth_error:
+        print(f"❌ Authentication error: {str(auth_error)}")
+        return jsonify({"success": False, "message": f"Authentication failed: {str(auth_error)}"}), 401
 
 
 if __name__ == "__main__":
-    import uvicorn
     import os
-    from asgiref.wsgi import WsgiToAsgi  # Import the adapter
+    import uvicorn
+    from asgiref.wsgi import WsgiToAsgi
 
-    # Get DEBUG setting from config or environment
     try:
         from config import DEBUG
-    except ImportError:
         DEBUG = os.environ.get("FLASK_ENV") == "development" or os.environ.get(
             "FLASK_DEBUG") == "1"
-        print(f"DEBUG setting fallback: {DEBUG}")
+    except ImportError:
+        DEBUG = False
 
     port = int(os.environ.get('PORT', 5001))
     print(f"Starting server with Uvicorn (via app.py) on port {port}...")
 
-    # Wrap the Flask WSGI app to make it ASGI compatible
     asgi_app = WsgiToAsgi(app)
 
-    # Run the wrapped ASGI app with Uvicorn
     uvicorn.run(
         asgi_app,
         host="0.0.0.0",

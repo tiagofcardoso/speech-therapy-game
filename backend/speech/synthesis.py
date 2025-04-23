@@ -78,11 +78,27 @@ def synthesize_speech(text, voice_settings=None):
     Returns:
         bytes: Dados binários do áudio.
     """
-    from gtts import gTTS
-    import io
-
     try:
         print(f"🔊 Configurações de voz: {voice_settings}")
+
+        # Check if we should try to use Amazon Polly first
+        use_polly = False
+        if voice_settings and 'voice_id' in voice_settings:
+            use_polly = True
+            print(
+                f"🔊 Tentando usar Amazon Polly com voz: {voice_settings['voice_id']}")
+            try:
+                polly_audio = _synthesize_amazon(text, voice_settings)
+                if polly_audio:
+                    print(f"✅ Áudio sintetizado com Amazon Polly")
+                    return base64.b64decode(polly_audio)
+            except Exception as polly_error:
+                print(f"⚠️ Erro com Amazon Polly: {str(polly_error)}")
+                print("Fallback para gTTS")
+
+        # If not using Polly or Polly failed, use gTTS
+        from gtts import gTTS
+        import io
 
         # Usar o código de idioma apropriado, padrão pt-PT
         lang_code = voice_settings.get(
@@ -111,7 +127,7 @@ def synthesize_speech(text, voice_settings=None):
         audio_bytes = mp3_fp.read()
 
         print(
-            f"✅ Áudio sintetizado com sucesso. Tamanho: {len(audio_bytes)} bytes")
+            f"✅ Áudio sintetizado com gTTS. Tamanho: {len(audio_bytes)} bytes")
         return audio_bytes
 
     except Exception as e:

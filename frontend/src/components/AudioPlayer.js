@@ -1,28 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './AudioPlayer.css';
 import api from '../services/api';
+import audioManager from '../utils/AudioManager';
 
 // Modificar a função loadAudio
-const loadAudio = async (text) => {
-    console.log("🔊 loadAudio chamado para:", text);
+const loadAudio = async (text, usePolly = true) => {
+    console.log(`🔊 loadAudio chamado para: "${text}" (usePolly: ${usePolly})`);
     try {
-        console.log("Solicitando síntese de fala para:", text);
-        const response = await api.post('/api/synthesize-speech', {
-            text,
-            voice_settings: { language_code: 'pt-PT' }
-        }, {
-            // Adicionar headers específicos
+        // Choose the appropriate endpoint based on whether we want to use AWS Polly
+        const endpoint = usePolly ? '/api/synthesize' : '/api/synthesize-speech';
+        const payload = usePolly
+            ? { text, voice_id: 'Ines', language_code: 'pt-PT' }
+            : { text, voice_settings: { language_code: 'pt-PT' } };
+
+        console.log(`Solicitando síntese de fala para: "${text}" via ${endpoint}`);
+
+        const response = await api.post(endpoint, payload, {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            // Aumentar timeout
             timeout: 10000
         });
 
         console.log("Resposta da API:", response.status);
 
-        // Verificar se a resposta é válida
         if (!response.data) {
             throw new Error("Resposta vazia do servidor");
         }
@@ -31,17 +33,25 @@ const loadAudio = async (text) => {
         console.log("📦 Resposta completa:", {
             status: response.status,
             success: response.data.success,
-            hasAudio: !!response.data.audio_data,
-            audioLength: response.data.audio_data ? response.data.audio_data.length : 0
+            hasAudio: !!response.data.audio_data || !!response.data.audio,
+            audioLength: (response.data.audio_data || response.data.audio || "").length
         });
 
-        if (response.data.success && response.data.audio_data) {
+        // Handle different response formats
+        let audioData = response.data.audio_data || response.data.audio;
+
+        if (audioData) {
             // Validar string base64
-            if (!/^[A-Za-z0-9+/=]+$/.test(response.data.audio_data)) {
-                throw new Error("Dados de áudio inválidos");
+            if (!/^[A-Za-z0-9+/=]+$/.test(audioData)) {
+                console.warn("⚠️ Dados de áudio em formato não padrão, tentando limpar");
+                // Try to clean up the data by removing non-base64 characters
+                audioData = audioData.replace(/[^A-Za-z0-9+/=]/g, '');
+                if (!/^[A-Za-z0-9+/=]+$/.test(audioData)) {
+                    throw new Error("Dados de áudio inválidos mesmo após limpeza");
+                }
             }
 
-            const audioUrl = `data:audio/mp3;base64,${response.data.audio_data}`;
+            const audioUrl = `data:audio/mp3;base64,${audioData}`;
             return audioUrl;
         } else {
             throw new Error(response.data.error || "Falha na síntese de fala");
@@ -57,191 +67,234 @@ const loadAudio = async (text) => {
     }
 };
 
-const AudioPlayer = ({ audioData, autoPlay = false, onPlayComplete = null }) => {
+const AudioPlayer = ({
+    audioData,
+    autoPlay = false,
+    onPlayComplete = null,
+    playerId = null,
+    allowOverlap = false, // New prop to control whether this audio can overlap others
+    loadingDelay = 0 // Delay before starting playback (useful for sequencing)
+}) => {
     const [isPlaying, setIsPlaying] = useState(false);
-    const [audioSrc, setAudioSrc] = useState(null);
     const [error, setError] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [retryCount, setRetryCount] = useState(0);
-    const [isRetrying, setIsRetrying] = useState(false);
     const audioRef = useRef(null);
-    const audioCache = useRef({});
+    const idRef = useRef(playerId || `audio-player-${Math.random().toString(36).substring(2, 9)}`);
+    const [isReady, setIsReady] = useState(false);
 
-    // Adicione este método para melhorar a manipulação de erros
-    const handleAudioError = (e) => {
-        console.error("Erro no elemento de áudio:", e);
+    // Register with AudioManager when component mounts
+    useEffect(() => {
+        // Create audio element if it doesn't exist
+        if (!audioRef.current) {
+            audioRef.current = new Audio();
+        }
 
-        // Verificar se temos dados de áudio válidos
-        if (!audioData || typeof audioData !== 'string' || audioData.length < 100) {
-            console.error("Dados de áudio inválidos ou muito pequenos", audioData);
+        // Use the stable ID from ref
+        const stableId = idRef.current;
+
+        // Register with audio manager
+        const unregister = audioManager.register(
+            stableId,
+            audioRef.current,
+            (playing) => setIsPlaying(playing),
+            onPlayComplete
+        );
+
+        // Enhance cleanup to include complete state reset
+        return () => {
+            unregister();
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.src = '';
+            }
+        };
+    }, [onPlayComplete]);
+
+    // Setup the audio element when audioData changes
+    useEffect(() => {
+        // Don't reset isReady if we're just re-mounting with same audio
+        if (!audioData) {
+            console.log(`AudioPlayer ${idRef.current}: Sem dados de áudio`);
             return;
         }
 
-        try {
-            // Criar uma URL de dados segura
-            if (!audioData.startsWith('data:')) {
-                console.log("Recriando URL de dados com prefixo");
-                // Criar uma nova URL de dados com o prefixo correto
-                const audioDataUrl = `data:audio/mp3;base64,${audioData}`;
-
-                // Aplicar diretamente no elemento audio
-                if (audioRef.current) {
-                    console.log("Aplicando URL de dados diretamente ao elemento audio");
-                    audioRef.current.src = audioDataUrl;
-                    audioRef.current.load();
-
-                    if (autoPlay) {
-                        const playPromise = audioRef.current.play();
-                        if (playPromise) {
-                            playPromise.catch(playError => {
-                                console.warn("Erro ao reproduzir após recriação:", playError);
-                            });
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Erro ao tentar recuperar playback:", error);
-        }
-    };
-
-    // Modificar useEffect que processa audioData
-    useEffect(() => {
-        let isMounted = true;
-
-        const processAudio = async () => {
-            if (!audioData || isRetrying) return;
+        // Only reset ready state and reconfigure if audio data actually changed
+        if (audioRef.current.dataset.lastAudioHash !== String(audioData.length)) {
+            setIsReady(false);
 
             try {
-                setIsLoading(true);
-                setError(null);
+                console.log(`AudioPlayer ${idRef.current}: Configurando áudio (${typeof audioData} com tamanho ${typeof audioData === 'string' ? audioData.length : 'N/A'})`);
 
-                if (typeof audioData === 'string' && audioData.trim().length > 0) {
-                    const audioUrl = `data:audio/mp3;base64,${audioData}`;
-                    if (isMounted) {
-                        setAudioSrc(audioUrl);
-                        setIsLoading(false);
+                // Configure audio source
+                let audioSrc;
+                if (typeof audioData === 'string') {
+                    if (audioData.startsWith('http') || audioData.startsWith('blob:') || audioData.startsWith('data:')) {
+                        audioSrc = audioData;
+                    } else {
+                        audioSrc = `data:audio/mp3;base64,${audioData}`;
                     }
-                } else if (retryCount < 3) { // Limitar tentativas
-                    console.warn("Tentando recuperar áudio novamente...");
-                    setIsRetrying(true);
-                    setRetryCount(prev => prev + 1);
 
-                    // Aguardar antes de tentar novamente
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    console.log(`AudioPlayer ${idRef.current}: URL do áudio configurada: ${audioSrc.substring(0, 40)}...`);
 
-                    if (isMounted) {
-                        setIsRetrying(false);
-                    }
+                    // Set the source and load the audio
+                    audioRef.current.src = audioSrc;
+                    audioRef.current.load();
+
+                    // Store a hash of the audio data to detect changes
+                    audioRef.current.dataset.lastAudioHash = String(audioData.length);
+
+                    // Mark as ready after a short delay
+                    const readyTimer = setTimeout(() => {
+                        setIsReady(true);
+
+                        // Try to autoplay if requested, after loadingDelay
+                        if (autoPlay) {
+                            const playTimer = setTimeout(() => {
+                                try {
+                                    console.log(`AudioPlayer ${idRef.current}: Tentando autoplay`);
+                                    audioManager.play(idRef.current, allowOverlap)
+                                        .catch(err => {
+                                            if (err.name !== 'AbortError') {
+                                                console.warn(`AudioPlayer ${idRef.current}: Erro em autoplay:`, err);
+                                                setError(`Falha ao reproduzir: ${err.message}`);
+                                            }
+                                        });
+                                } catch (err) {
+                                    console.error(`AudioPlayer ${idRef.current}: Erro ao executar autoplay:`, err);
+                                }
+                            }, loadingDelay);
+
+                            return () => clearTimeout(playTimer);
+                        }
+                    }, 100);
+
+                    return () => clearTimeout(readyTimer);
                 } else {
-                    throw new Error("Dados de áudio inválidos após várias tentativas");
+                    console.error(`AudioPlayer ${idRef.current}: Tipo de dados de áudio não suportado:`, typeof audioData);
+                    setError("Formato de áudio inválido");
                 }
             } catch (err) {
-                console.error("Erro ao processar audioData:", err);
-                if (isMounted) {
-                    setError(`Erro: ${err.message}`);
-                    setIsLoading(false);
-                }
+                console.error(`AudioPlayer ${idRef.current}: Erro ao configurar áudio:`, err);
+                setError(`Erro ao configurar áudio: ${err.message}`);
             }
-        };
+        } else {
+            console.log(`AudioPlayer ${idRef.current}: Usando áudio já carregado (hash: ${audioRef.current.dataset.lastAudioHash})`);
+            setIsReady(true);
+        }
+    }, [audioData, autoPlay, allowOverlap, loadingDelay]);
 
-        processAudio();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [audioData, retryCount]);
-
-    // Função para tocar áudio
-    const playAudio = () => {
-        if (!audioRef.current || !audioSrc) {
-            console.warn("Tentando reproduzir áudio sem source definido");
+    // Function to toggle play/pause
+    const togglePlay = () => {
+        if (!isReady) {
+            console.log(`AudioPlayer ${idRef.current}: Tentativa de reprodução antes de estar pronto`);
             return;
         }
 
-        console.log("Iniciando reprodução de áudio");
+        console.log(`AudioPlayer ${idRef.current}: Botão de play/pause clicado. Estado atual:`, isPlaying);
 
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-            playPromise
-                .then(() => {
-                    console.log("Reprodução iniciada com sucesso");
-                    setIsPlaying(true);
-                })
+        if (!audioRef.current) {
+            console.error(`AudioPlayer ${idRef.current}: Elemento de áudio não inicializado`);
+            setError("Não foi possível inicializar o áudio");
+            return;
+        }
+
+        if (isPlaying) {
+            console.log(`AudioPlayer ${idRef.current}: Pausando áudio`);
+            audioManager.stop(idRef.current);
+        } else {
+            console.log(`AudioPlayer ${idRef.current}: Iniciando reprodução`);
+
+            audioManager.play(idRef.current, allowOverlap)
                 .catch(err => {
-                    console.error("Erro na reprodução:", err);
-                    setError(`Erro de reprodução: ${err.message}`);
-                    setIsPlaying(false);
+                    console.error(`AudioPlayer ${idRef.current}: Erro ao iniciar reprodução:`, err);
+                    setError(`Falha ao reproduzir: ${err.message}`);
+                    tryAlternativePlayback();
                 });
         }
     };
 
-    // Alternar entre play/pause
-    const togglePlay = () => {
-        if (isPlaying) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        } else {
-            playAudio();
+    // Function for alternative playback method
+    const tryAlternativePlayback = () => {
+        try {
+            console.log(`AudioPlayer ${idRef.current}: 🛠️ Tentando método alternativo de reprodução`);
+
+            if (!audioRef.current || !audioRef.current.src) {
+                throw new Error("Elemento de áudio não inicializado ou sem fonte");
+            }
+
+            // Create a new Audio element with the same source
+            const newAudio = new Audio(audioRef.current.src);
+            audioRef.current = newAudio;
+
+            // Re-register with audio manager
+            audioManager.register(
+                idRef.current,
+                newAudio,
+                (playing) => setIsPlaying(playing),
+                onPlayComplete
+            );
+
+            // Try to play
+            audioManager.play(idRef.current, allowOverlap)
+                .catch(err => {
+                    console.error(`AudioPlayer ${idRef.current}: Erro no método alternativo:`, err);
+                    setError(`Todos os métodos de reprodução falharam`);
+                });
+
+        } catch (e) {
+            console.error(`AudioPlayer ${idRef.current}: Falha no método alternativo:`, e);
+            setError(`Todos os métodos de reprodução falharam: ${e.message}`);
         }
     };
 
-    // Efeitos para manipulação de eventos do áudio
-    useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        const handleEnded = () => {
-            setIsPlaying(false);
-            if (onPlayComplete) onPlayComplete();
-        };
-
-        audio.addEventListener('ended', handleEnded);
-
-        return () => {
-            audio.removeEventListener('ended', handleEnded);
-        };
-    }, [onPlayComplete]);
-
-    // Autoplay quando audioSrc muda
-    useEffect(() => {
-        if (autoPlay && audioSrc && audioRef.current) {
-            const timeoutId = setTimeout(() => playAudio(), 100);
-            return () => clearTimeout(timeoutId);
-        }
-    }, [audioSrc, autoPlay]);
-
     return (
-        <div className="audio-player">
-            <audio
-                ref={audioRef}
-                onError={handleAudioError} // Adicione o manipulador de erros
-            >
-                Your browser does not support the audio element.
-            </audio>
-
+        <div className={`audio-player ${playerId ? `audio-player-${playerId}` : ''}`} data-player-id={idRef.current}>
             <button
-                className="play-button"
+                className={`play-button ${isPlaying ? 'playing' : ''} ${error ? 'error' : ''}`}
                 onClick={togglePlay}
-                disabled={!audioSrc || isLoading}
+                disabled={!audioData || !isReady}
+                aria-label={isPlaying ? "Pausar áudio" : "Reproduzir áudio"}
             >
                 <i className={`fas fa-${isPlaying ? 'pause' : 'play'}`}></i>
             </button>
 
-            {isLoading && <div className="loading">Carregando áudio...</div>}
-            {error && <div className="error">{error}</div>}
+            {error && (
+                <div className="audio-error">
+                    <span title={error}>Erro</span>
+                    <button
+                        className="retry-button"
+                        onClick={tryAlternativePlayback}
+                        aria-label="Tentar novamente"
+                    >
+                        <i className="fas fa-redo"></i>
+                    </button>
+                </div>
+            )}
 
-            {/* Botão de diagnóstico (apenas em desenvolvimento) */}
-            {process.env.NODE_ENV !== 'production' && audioSrc && (
+            {/* Debug button in development only */}
+            {process.env.NODE_ENV === 'development' && (
                 <button
-                    onClick={() => {
-                        console.log("Diagnóstico:");
-                        console.log("- AudioSrc:", audioSrc.substring(0, 50) + "...");
-                        console.log("- Elemento:", audioRef.current);
-                    }}
                     className="debug-button"
+                    onClick={() => {
+                        console.log(`=== DEBUG AUDIO PLAYER ${idRef.current} ===`);
+                        console.log("audioRef:", audioRef.current);
+                        console.log("audioData:", typeof audioData === 'string' ?
+                            `${audioData.substring(0, 50)}... (${audioData.length} chars)` :
+                            audioData);
+                        console.log("isPlaying:", isPlaying);
+                        console.log("error:", error);
+                        console.log("audioManager state:", audioManager.getDebugInfo());
+
+                        if (audioRef.current) {
+                            console.log("Audio element properties:");
+                            console.log("- src:", audioRef.current.src);
+                            console.log("- paused:", audioRef.current.paused);
+                            console.log("- currentTime:", audioRef.current.currentTime);
+                            console.log("- duration:", audioRef.current.duration);
+                            console.log("- error:", audioRef.current.error);
+                        }
+                    }}
                 >
-                    Diagnosticar
+                    Debug
                 </button>
             )}
         </div>

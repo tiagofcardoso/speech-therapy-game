@@ -32,6 +32,9 @@ class Message:
         self.tool = tool
         self.params = params
 
+        if 'language' not in self.params:
+            self.params['language'] = 'pt-PT'
+
 
 class ModelContext:
     """Context for storing and retrieving data across agent calls"""

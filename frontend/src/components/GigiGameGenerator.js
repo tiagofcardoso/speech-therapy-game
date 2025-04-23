@@ -37,30 +37,46 @@ const GigiGameGenerator = () => {
     };
 
     const generateGame = async () => {
-        setLoading(true);
-        setError(null);
-        setGeneratedGame(null);
-
-        // Log de debug
-        console.log("Iniciando geração de jogo");
-        console.log("Token presente:", Boolean(localStorage.getItem('token')));
-
         try {
-            const response = await api.post('/api/gigi/generate-game', {
-                game_type: gameType || undefined,
-                difficulty: difficulty || undefined
-            });
+            setLoading(true);
+            setError(null);
+            console.log("Iniciando geração de jogo");
 
-            console.log("Resposta da API:", response.data);
+            // Create the request payload
+            const requestData = {
+                difficulty: difficulty,
+                game_type: gameType || "exercícios de pronúncia",
+            };
 
-            if (response.data.success) {
+            console.log("Token presente:", !!localStorage.getItem('token'));
+
+            // Use the enhanced postWithRetry method for more resilience
+            const response = await api.postWithRetry(
+                '/api/gigi/generate-game',
+                requestData,
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                },
+                // 2 retries in addition to initial attempt
+                2
+            );
+
+            console.log("Game generated successfully:", response.data);
+
+            if (response.data.success && response.data.game) {
                 setGeneratedGame(response.data.game);
             } else {
-                setError(response.data.message || "Falha ao gerar o jogo");
+                setError("O jogo foi gerado mas houve um problema com os dados retornados.");
             }
         } catch (err) {
             console.error("Game generation error:", err);
-            setError(err.response?.data?.message || "Erro ao conectar com o servidor");
+
+            const errorMessage = err.response?.data?.message ||
+                (err.message.includes('timeout')
+                    ? "A geração do jogo está demorando mais do que o esperado. Por favor, tente novamente em alguns instantes."
+                    : "Erro ao gerar o jogo. Por favor, tente novamente.");
+
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
