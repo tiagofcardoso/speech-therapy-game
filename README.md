@@ -35,7 +35,6 @@ This project implements an advanced MCP Agentic architecture that coordinates mu
 
 #### 4. Specialized Agents
 
-- **MCPCoordinator**: Orchestrates communication and manages the complete system
 - **GameDesignerAgent**: Creates customized games and exercises based on user needs
 - **SpeechEvaluatorAgent**: Analyzes pronunciation accuracy using AI models
 - **TutorAgent**: Provides pedagogical feedback with voice synthesis capabilities
@@ -50,6 +49,8 @@ This project implements an advanced MCP Agentic architecture that coordinates mu
 - **Async-First Design**: Non-blocking operations for better performance
 
 ### Architecture Diagram
+
+```
 ┌────────────┐         ┌────────────┐         ┌────────────┐
 │   Client   │         │  API Layer │         │ MCP System │
 │            │ ──────► │            │ ──────► │            │
@@ -66,8 +67,11 @@ This project implements an advanced MCP Agentic architecture that coordinates mu
 │    Game    │   │   Speech   │    │    Tutor   │    │   Search   │
 │  Designer  │   │ Evaluator  │    │    Agent   │    │    Agent   │
 └────────────┘   └────────────┘    └────────────┘    └────────────┘
+```
 
-## Usage Exemple
+## Usage Example
+
+```python
 # Initialize the MCP system
 mcp = MCPSystem(api_key="your-openai-key", db_connector=db)
 await mcp.initialize_agents()
@@ -87,7 +91,7 @@ result = await mcp.process_user_response(
 print(f"Evaluation score: {result['evaluation']['score']}")
 print(f"Feedback: {result['feedback']['text']}")
 print(f"Next exercise: {result['next_exercise']['text']}")
-
+```
 
 ### Benefits
 
@@ -236,25 +240,39 @@ We enhanced the AI integration for better speech evaluation:
    ```bash
    git clone https://github.com/your-username/speech-therapy-game.git
    cd speech-therapy-game/backend
+   ```
 
 2. Create and activate virtual environment:  
-  python -m venv venv
-  source venv/bin/activate  # Linux/Mac
-  venv\Scripts\activate  # Windows
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   venv\Scripts\activate  # Windows
+   ```
 
 3. Install dependencies: 
-  pip install -r requirements.txt
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 4. Install additional dependencies for audio processing:
-  pip install SpeechRecognition pydub rapidfuzz
+   ```bash
+   pip install SpeechRecognition pydub rapidfuzz
+   ```
 
-5. cp .env.example .env 
-# Edit .env with your settings
+5. Set up environment variables:
+   ```bash
+   cp .env.example .env 
+   # Edit .env with your settings
+   ```
 
 ### Start application
 
 1. Start the server BACKEND:
-    python app.py
+   ```bash
+   python app.py
+   ```
 
 2. Start app FRONTEND:
-    npm start
+   ```bash
+   npm start
+   ```
