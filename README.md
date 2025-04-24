@@ -71,39 +71,199 @@ This project implements an advanced MCP Agentic architecture that coordinates mu
 
 ## Usage Example
 
+The MCP (Model Context Protocol) architecture coordinates multiple specialized AI agents to provide a personalized speech therapy experience. Below are examples of how to implement and use this system in different scenarios:
+
+### Basic Setup and Configuration
+
 ```python
+# Required imports
+from ai.server.mcp_coordinator import MCPSystem
+from ai.server.mcp_server import Message, ModelContext
+from database.db_connector import DatabaseConnector
+
+# Configure database connection
+db = DatabaseConnector()
+
 # Initialize the MCP system
 mcp = MCPSystem(api_key="your-openai-key", db_connector=db)
+
+# Initialize all agents asynchronously
 await mcp.initialize_agents()
-
-# Create a session using the MCP workflow
-session = await mcp.create_interactive_session(user_id="user123")
-
-# Process user input through multiple coordinated agents
-result = await mcp.process_user_response(
-    user_id="user123",
-    response="User's spoken text",
-    expected_text="Target pronunciation",
-    session_id=session["session_id"]
-)
-
-# Access the combined results from multiple agents
-print(f"Evaluation score: {result['evaluation']['score']}")
-print(f"Feedback: {result['feedback']['text']}")
-print(f"Next exercise: {result['next_exercise']['text']}")
 ```
 
-### Benefits
+### Creating a New Game Session
 
-This architecture provides significant advantages:
-- **Scalability**: Agents operate independently and can scale separately
-- **Flexibility**: New capabilities can be added without changing existing agents
-- **Adaptability**: System dynamically adjusts to user needs and preferences
-- **Observability**: Comprehensive telemetry across all operations
-- **Resilience**: Built-in error handling and graceful degradation
+```python
+# Create context for a new session
+user_id = "user123"  # User ID in the system
+context = ModelContext()  # Shared context between agents
 
-This modular approach allows dynamic generation of educational content perfectly adapted to each user's specific needs while maintaining system reliability and performance.
+# Create an interactive session for the user
+session = await mcp.create_interactive_session(user_id=user_id)
 
+# Information about the created session
+session_id = session["session_id"]
+print(f"New session created: {session_id}")
+print(f"Determined difficulty: {session['difficulty']}")
+print(f"Game type: {session['game_data']['game_type']}")
+```
+
+### Agent Communication with Messages
+
+```python
+# Create a message for the Game Designer Agent
+game_message = Message(
+    from_agent="api",             # Source agent
+    to_agent="game_designer",     # Destination agent
+    tool="create_game",           # Tool to be used
+    params={                      # Parameters for the tool
+        "user_id": user_id,
+        "difficulty": "beginner",
+        "game_type": "pronunciation exercises"
+    }
+)
+
+# Process the message and get the result
+game_data = await mcp.server.process_message(game_message, context)
+
+# Data from the created game
+print(f"Game created: {game_data['title']}")
+print(f"Exercises: {len(game_data['exercises'])}")
+```
+
+### MCP Coordinator Orchestrating Multiple Agents
+
+```python
+# Example of the MCP Coordinator orchestrating multiple agents
+async def orchestrate_agents_workflow(user_prompt, user_id):
+    # Create a shared context for this workflow
+    context = ModelContext()
+    context.set("user_id", user_id)
+    context.set("user_prompt", user_prompt)
+    
+    # 1. First, get difficulty recommendation from Progression Manager
+    difficulty_msg = Message(
+        from_agent="coordinator",
+        to_agent="progression_manager", 
+        tool="determine_difficulty",
+        params={"user_id": user_id}
+    )
+    difficulty = await mcp.server.process_message(difficulty_msg, context)
+    context.set("difficulty", difficulty)
+    
+    # 2. Then have Game Designer create appropriate content
+    game_msg = Message(
+        from_agent="coordinator",
+        to_agent="game_designer",
+        tool="create_game",
+        params={
+            "user_id": user_id,
+            "difficulty": difficulty,
+            "game_type": "pronunciation exercises"
+        }
+    )
+    game_data = await mcp.server.process_message(game_msg, context)
+    context.set("game_data", game_data)
+    
+    # 3. Have Tutor prepare instructions and guidance
+    tutor_msg = Message(
+        from_agent="coordinator",
+        to_agent="tutor",
+        tool="create_instructions",
+        params={
+            "game_data": game_data,
+            "difficulty": difficulty,
+            "user_id": user_id
+        }
+    )
+    instructions = await mcp.server.process_message(tutor_msg, context)
+    
+    # 4. Return the complete package with contributions from all agents
+    return {
+        "game": game_data,
+        "instructions": instructions,
+        "difficulty": difficulty,
+        "session_id": str(uuid.uuid4())
+    }
+```
+
+### Pronunciation Evaluation
+
+```python
+# Evaluate user pronunciation
+evaluation_result = await mcp.evaluate_pronunciation(
+    audio_file=open("audio_sample.webm", "rb"),  # Audio file
+    expected_word="casa",                        # Expected word
+    user_id=user_id,                             # User ID
+    session_id=session_id                        # Session ID
+)
+
+# Process evaluation results
+is_correct = evaluation_result["isCorrect"]
+score = evaluation_result["score"]
+feedback = evaluation_result["feedback"]
+
+print(f"Pronunciation correct: {is_correct}")
+print(f"Score: {score}/10")
+print(f"Feedback: {feedback}")
+```
+
+### Complete Exercise Flow
+
+```python
+# Example of a complete flow from game generation to evaluation
+
+async def complete_exercise_workflow(user_id):
+    # 1. Create session and get game
+    session = await mcp.create_interactive_session(user_id=user_id)
+    session_id = session["session_id"]
+    
+    # 2. Get the current exercise
+    current_exercise = session["game_data"]["exercises"][0]
+    word_to_pronounce = current_exercise["word"]
+    
+    # 3. Synthesize audio for the user to hear
+    from speech.synthesis import synthesize_speech
+    audio_data = synthesize_speech(
+        text=word_to_pronounce,
+        voice_settings={"language_code": "pt-PT"}
+    )
+    
+    # 4. Simulation of user audio recording
+    # (In the real application, audio would come from the frontend)
+    user_audio = get_user_audio_recording()
+    
+    # 5. Evaluate pronunciation
+    result = await mcp.evaluate_pronunciation(
+        audio_file=user_audio,
+        expected_word=word_to_pronounce,
+        user_id=user_id,
+        session_id=session_id
+    )
+    
+    # 6. Update progress and provide feedback
+    if result["isCorrect"]:
+        await mcp.server.process_message(
+            Message(
+                from_agent="api",
+                to_agent="tutor",
+                tool="generate_positive_feedback",
+                params={"result": result, "user_id": user_id}
+            ),
+            ModelContext()
+        )
+    
+    return result
+```
+
+### Implementation Tips
+
+- **Shared Context**: Use `ModelContext` to share data between different agents.
+- **Asynchronous Handling**: Leverage `async/await` methods for non-blocking operations.
+- **Error Handling**: Add exception handling to deal with service failures.
+- **Extensibility**: Create new agents by implementing the `BaseAgent` interface.
+
+For more examples and advanced use cases, see the test files in the `tests/` folder.
 
 ## Technologies Used
 
