@@ -227,9 +227,16 @@ class MCPSystem:
                     if hasattr(self._game_designer_instance, 'initialize'):
                         await self._game_designer_instance.initialize()
 
+                # Initialize ProgressionManagerAgent if needed
+                if not hasattr(self, '_progression_manager_instance'):
+                    self._progression_manager_instance = ProgressionManagerAgent()
+                    if hasattr(self._progression_manager_instance, 'initialize'):
+                        await self._progression_manager_instance.initialize()
+
                 # Extract parameters
                 user_id = message.params.get("user_id")
-                difficulty = message.params.get("difficulty", "iniciante")
+                requested_difficulty = message.params.get(
+                    "difficulty", "iniciante")
                 game_type = message.params.get(
                     "game_type", "exercícios de pronúncia")
                 language = message.params.get("language", "pt-PT")
@@ -238,17 +245,56 @@ class MCPSystem:
                 if not user_id:
                     raise ValueError("user_id is required")
 
+                # Get user profile from database to determine appropriate difficulty
                 try:
-                    # Call create_game and ensure it returns data
+                    user_profile = None
+                    if hasattr(self.db_connector, 'get_user_by_id'):
+                        user_profile = self.db_connector.get_user_by_id(
+                            user_id)
+                        self.logger.info(
+                            f"Retrieved user profile for user: {user_id}")
+
+                    if not user_profile:
+                        self.logger.warning(
+                            f"User profile not found for {user_id}, using default")
+                        user_profile = {"id": user_id, "age": 7}
+
+                    # Use progression manager to determine appropriate difficulty
+                    self.logger.info(
+                        f"Using progression manager to determine difficulty for user {user_id}")
+                    determined_difficulty = await self._get_appropriate_difficulty(user_id, user_profile, requested_difficulty)
+
+                    self.logger.info(
+                        f"Difficulty determined by progression manager: {determined_difficulty}")
+
+                    # Store the determined difficulty in context
+                    context.set("determined_difficulty", determined_difficulty)
+
+                    # Choose game type based on user level
+                    varied_game_type = self._vary_game_type(
+                        determined_difficulty, game_type)
+                    self.logger.info(
+                        f"Varied game type based on difficulty: {varied_game_type}")
+
+                    # Call create_game with the determined difficulty
                     game_data = await self._game_designer_instance.create_game(
                         user_id=user_id,
-                        difficulty=difficulty,
-                        game_type=game_type
+                        difficulty=determined_difficulty,
+                        game_type=varied_game_type
                     )
 
                     if not game_data:
                         raise ValueError(
                             "No game data returned from create_game")
+
+                    # Add metadata about how the game was generated
+                    game_data["generation_metadata"] = {
+                        "requested_difficulty": requested_difficulty,
+                        "determined_difficulty": determined_difficulty,
+                        "requested_game_type": game_type,
+                        "varied_game_type": varied_game_type,
+                        "generation_timestamp": datetime.datetime.utcnow().isoformat()
+                    }
 
                     return game_data
 
@@ -264,6 +310,82 @@ class MCPSystem:
         except Exception as e:
             self.logger.error(f"Error in game designer handler: {str(e)}")
             return {"error": str(e)}
+
+    async def _get_appropriate_difficulty(self, user_id: str, user_profile: Dict[str, Any], requested_difficulty: str) -> str:
+        """
+        Determine the appropriate difficulty level based on user's progression
+        """
+        try:
+            # If the user explicitly requested a difficulty, use it
+            if requested_difficulty not in ["auto", "random", ""]:
+                self.logger.info(
+                    f"Using explicitly requested difficulty: {requested_difficulty}")
+                return requested_difficulty
+
+            # Otherwise, consult the progression manager
+            if hasattr(self, '_progression_manager_instance'):
+                # Get user history from database
+                try:
+                    if hasattr(self.db_connector, 'get_user_history'):
+                        history = self.db_connector.get_user_history(user_id)
+                        if history and not isinstance(history, dict):
+                            history = {"completed_sessions": history}
+
+                        # Add history to user profile
+                        user_profile["history"] = history
+                except Exception as hist_err:
+                    self.logger.error(
+                        f"Error retrieving user history: {str(hist_err)}")
+
+                # Call progression manager to determine difficulty
+                difficulty = self._progression_manager_instance.determine_difficulty(
+                    user_profile)
+                self.logger.info(
+                    f"Difficulty determined by progression manager: {difficulty}")
+                return difficulty
+            else:
+                self.logger.warning(
+                    "Progression manager not available, using default difficulty")
+                return "iniciante"
+        except Exception as e:
+            self.logger.error(f"Error determining difficulty: {str(e)}")
+            return "iniciante"  # Fallback to beginner
+
+    def _vary_game_type(self, difficulty: str, base_game_type: str) -> str:
+        """
+        Vary the game type based on difficulty level to make games more diverse
+        """
+        # Dictionary of game types by difficulty
+        game_types = {
+            "iniciante": [
+                "exercícios de pronúncia básica",
+                "jogos de rimas simples",
+                "reconhecimento de sons básicos",
+                "nomeação de objetos comuns"
+            ],
+            "médio": [
+                "exercícios de pronúncia de palavras compostas",
+                "reconhecimento de sons complexos",
+                "exercícios de oposição de sons",
+                "jogos de sequência de palavras"
+            ],
+            "avançado": [
+                "exercícios de pronúncia de frases completas",
+                "trava-línguas",
+                "narração de histórias curtas",
+                "exercícios de pronúncia rápida",
+                "discriminação auditiva avançada"
+            ]
+        }
+
+        # If base type is specified and valid, use it as is
+        if base_game_type and base_game_type != "exercícios de pronúncia":
+            return base_game_type
+
+        # Otherwise, choose randomly from appropriate list based on difficulty
+        import random
+        available_types = game_types.get(difficulty, game_types["iniciante"])
+        return random.choice(available_types)
 
     async def _tutor_handler(self, message: Message, context: ModelContext) -> Dict[str, Any]:
         """Handle tutor agent messages"""
@@ -540,9 +662,13 @@ class MCPSystem:
                     try:
                         if os.path.exists(temp_audio_path):
                             os.remove(temp_audio_path)
+                            self.logger.info(
+                                f"Arquivo temporário removido: {temp_audio_path}")
                         wav_path = temp_audio_path.replace(".webm", ".wav")
                         if os.path.exists(wav_path):
                             os.remove(wav_path)
+                            self.logger.info(
+                                f"Arquivo temporário WAV removido: {wav_path}")
                     except Exception as e:
                         self.logger.error(
                             f"Erro ao limpar arquivos temporários: {e}")
@@ -896,6 +1022,21 @@ class MCPSystem:
             f"Avaliando pronúncia: palavra='{expected_word}', user_id={user_id}, session_id={session_id}")
 
         try:
+            # Import the agent interaction tracker if available
+            try:
+                from utils.agent_diagnostics import interaction_tracker
+                interaction_tracker.start_session(
+                    session_id=session_id, user_id=user_id)
+                interaction_tracker.log_interaction(
+                    from_agent="mcp_coordinator",
+                    to_agent="speech_evaluator",
+                    message_type="evaluate_pronunciation_request",
+                    data={"expected_word": expected_word}
+                )
+            except ImportError:
+                self.logger.debug("Agent diagnostics not available")
+                interaction_tracker = None
+
             # Criar contexto para a solicitação
             context = ModelContext()
             if user_id:
@@ -909,6 +1050,8 @@ class MCPSystem:
             audio_data = audio_file.read()
 
             # Enviar solicitação para o Speech Evaluator Agent
+            self.logger.info(
+                f"[COORDINATOR] Sending evaluation request to speech_evaluator agent")
             evaluation_message = Message(
                 from_agent="system",
                 to_agent="speech_evaluator",  # Nome do agente responsável pela avaliação de pronúncia
@@ -921,7 +1064,22 @@ class MCPSystem:
             )
 
             # Processar a avaliação
+            self.logger.info(
+                f"[COORDINATOR] Processing message via speech_evaluator agent")
             result = await self.server.process_message(evaluation_message, context)
+            self.logger.info(
+                f"[COORDINATOR] Received response from speech_evaluator agent")
+
+            # Log the interaction response if tracker available
+            if interaction_tracker:
+                interaction_tracker.log_interaction(
+                    from_agent="speech_evaluator",
+                    to_agent="mcp_coordinator",
+                    message_type="evaluate_pronunciation_response",
+                    data={},
+                    response={k: v for k, v in result.items() if k !=
+                              'audio_feedback'}
+                )
 
             # Se não tiver um agente real de avaliação, podemos fornecer uma implementação simulada
             # para testes durante o desenvolvimento
@@ -969,6 +1127,123 @@ class MCPSystem:
             if 'success' not in result:
                 result['success'] = True
 
+            # Add debugging information if not already present
+            if 'debug_info' not in result and 'recognized_text' in result:
+                normalized_expected = expected_word.lower().replace('-', ' ').strip()
+                normalized_recognized = result['recognized_text'].lower(
+                ).strip()
+
+                # Check for compound word matching
+                no_space_expected = normalized_expected.replace(' ', '')
+                no_space_recognized = normalized_recognized.replace(' ', '')
+
+                result['debug_info'] = {
+                    "normalized": {
+                        "expected": normalized_expected,
+                        "recognized": normalized_recognized
+                    },
+                    "no_spaces": {
+                        "expected": no_space_expected,
+                        "recognized": no_space_recognized,
+                        "match": no_space_expected == no_space_recognized
+                    }
+                }
+
+                # If compound word without spaces/hyphens matches but was marked incorrect, override
+                if not result['isCorrect'] and no_space_expected == no_space_recognized:
+                    self.logger.info(
+                        f"[COORDINATOR] Overriding incorrect result: compound word match detected")
+                    result['isCorrect'] = True
+                    result['score'] = max(result.get('score', 0), 8)
+
+                    # IMPORTANT FIX: Create a clear feedback message that will translate well to audio
+                    feedback_message = f"Boa pronúncia de '{expected_word}'! Reconheci corretamente."
+                    result['feedback'] = feedback_message
+                    result['debug_info']['override_applied'] = True
+
+                    # Log the explicit feedback that will be used for TTS
+                    self.logger.info(
+                        f"[COORDINATOR] Setting explicit feedback for TTS: '{feedback_message}'")
+
+                    # Remove previous audio feedback if any (to make sure we generate new audio)
+                    if "audio_feedback" in result:
+                        del result["audio_feedback"]
+
+            # Gerar áudio para o feedback - with improved reliability
+            if not result.get('audio_feedback') and result.get('feedback'):
+                feedback_text = result.get('feedback')
+                self.logger.info(
+                    f"[COORDINATOR] 🔊 Generating feedback audio for text: '{feedback_text}'")
+                try:
+                    # Use the system synthesize_speech function
+                    from speech.synthesis import synthesize_speech
+                    self.logger.info(
+                        f"[COORDINATOR] Calling synthesize_speech for feedback audio")
+
+                    # Create audio for the feedback
+                    audio_bytes = synthesize_speech(
+                        feedback_text,
+                        voice_settings={
+                            "language_code": "pt-PT",
+                            "voice_id": "Ines"  # Explicitly use Ines for better quality
+                        }
+                    )
+
+                    # Convert to base64
+                    import base64
+                    audio_base64 = base64.b64encode(
+                        audio_bytes).decode('utf-8')
+                    result["audio_feedback"] = audio_base64
+
+                    self.logger.info(
+                        f"[COORDINATOR] ✅ Feedback audio generated successfully: {len(audio_base64)} characters")
+
+                    # Log the audio generation if tracker available
+                    if interaction_tracker:
+                        interaction_tracker.log_interaction(
+                            from_agent="mcp_coordinator",
+                            to_agent="tts_service",
+                            message_type="generate_feedback_audio",
+                            data={"text": feedback_text},
+                            response={"success": True,
+                                      "length": len(audio_base64)}
+                        )
+                except Exception as tts_error:
+                    self.logger.error(
+                        f"[COORDINATOR] ⚠️ Error generating feedback audio: {str(tts_error)}")
+                    # Fall back to gTTS if synthesize_speech fails
+                    try:
+                        self.logger.info(
+                            f"[COORDINATOR] Falling back to gTTS for feedback audio")
+                        from gtts import gTTS
+                        import io
+                        import base64
+
+                        mp3_fp = io.BytesIO()
+                        tts = gTTS(text=feedback_text, lang='pt', slow=False)
+                        tts.write_to_fp(mp3_fp)
+                        mp3_fp.seek(0)
+
+                        audio_base64 = base64.b64encode(
+                            mp3_fp.read()).decode('utf-8')
+                        result["audio_feedback"] = audio_base64
+                        self.logger.info(
+                            f"[COORDINATOR] ✅ Fallback audio feedback generated: {len(audio_base64)} characters")
+
+                        # Log the fallback audio generation if tracker available
+                        if interaction_tracker:
+                            interaction_tracker.log_interaction(
+                                from_agent="mcp_coordinator",
+                                to_agent="gtts_service",
+                                message_type="generate_feedback_audio_fallback",
+                                data={"text": feedback_text},
+                                response={"success": True,
+                                          "length": len(audio_base64)}
+                            )
+                    except Exception as gtts_error:
+                        self.logger.error(
+                            f"[COORDINATOR] ❌ All TTS methods failed: {str(gtts_error)}")
+
             # Registrar resultado da avaliação no banco de dados se tivermos session_id
             if session_id:
                 try:
@@ -978,6 +1253,9 @@ class MCPSystem:
                         import inspect
                         is_async = inspect.iscoroutinefunction(
                             self.db_connector.save_pronunciation_evaluation)
+
+                        self.logger.info(
+                            f"[COORDINATOR] Saving evaluation to database for session {session_id}")
 
                         if is_async:
                             # Se o método for assíncrono, usar await
@@ -1003,7 +1281,7 @@ class MCPSystem:
                             )
 
                         self.logger.info(
-                            f"Avaliação salva no banco de dados para sessão {session_id}")
+                            f"[COORDINATOR] Avaliação salva no banco de dados para sessão {session_id}")
                     else:
                         self.logger.warning(
                             "Método save_pronunciation_evaluation não encontrado no db_connector")
@@ -1011,11 +1289,19 @@ class MCPSystem:
                     self.logger.error(
                         f"Erro ao salvar avaliação no banco de dados: {db_err}")
 
+            # Close the interaction tracking session if available
+            if interaction_tracker:
+                interaction_tracker.end_session(status="completed")
+
             return result
 
         except Exception as e:
             self.logger.error(
                 f"Erro na avaliação de pronúncia: {str(e)}", exc_info=True)
+            # Close the interaction tracking session with error if available
+            if 'interaction_tracker' in locals() and interaction_tracker:
+                interaction_tracker.end_session(status="error", error=str(e))
+
             return {
                 "success": False,
                 "isCorrect": False,

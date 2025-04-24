@@ -803,20 +803,26 @@ def gigi_game_post(user_id):
         data = request.get_json() or {}
         print(f"📝 Dados da requisição: {data}")
 
-        # Mapear dificuldade
-        game_type = data.get('game_type', "exercícios de pronúncia")
+        # Get difficulty - 'auto' means use progression manager
+        # If explicitly specified, use the requested difficulty
+        requested_difficulty = data.get('difficulty', 'auto')
 
+        # Mapear dificuldade se especificada explicitamente
         difficulty_map = {
             'advanced': 'avançado',
             'medium': 'médio',
-            'beginner': 'iniciante'
+            'beginner': 'iniciante',
+            'auto': 'auto'  # Special value to let progression manager decide
         }
-        requested_difficulty = data.get('difficulty', 'beginner')
+
         difficulty = difficulty_map.get(
-            requested_difficulty.lower(), 'iniciante')
+            requested_difficulty.lower(), 'auto')  # Default to auto if not recognized
+
+        # Mapear o tipo de jogo
+        game_type = data.get('game_type', "exercícios de pronúncia")
 
         print(
-            f"🔄 Mapeando dificuldade: '{requested_difficulty}' → '{difficulty}'")
+            f"🔄 Preparando solicitação de jogo: dificuldade={difficulty} (auto=usar progressão do usuário), tipo={game_type}")
 
         # Verificar inicialização do MCP
         global mcp_coordinator
@@ -827,7 +833,9 @@ def gigi_game_post(user_id):
                 "message": "Sistema de geração de jogos não disponível no momento."
             }), 500
 
-        # Criar uma função aninhada para processar a requisição de forma assíncrona
+        # Restante do código permanece igual, apenas passamos os parâmetros para o MCP
+        # O MCP agora consultará o ProgressionManagerAgent quando difficulty='auto'
+
         @async_to_sync
         async def process_game_request():
             try:
@@ -887,7 +895,7 @@ def gigi_game_post(user_id):
                 tool="create_game",
                 params={
                     "user_id": user_id,
-                    "difficulty": difficulty,
+                    "difficulty": difficulty,  # Now can be 'auto'
                     "game_type": game_type
                 }
             )

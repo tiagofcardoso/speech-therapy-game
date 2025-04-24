@@ -509,7 +509,9 @@ const GamePlay = () => {
 
             // Processar o audio_feedback
             if (audio_feedback) {
-                console.log(`🎵 Áudio de feedback recebido (${audio_feedback.length} caracteres)`);
+                console.log(`🎵 Audio feedback received (${audio_feedback.length} characters)`);
+                console.log(`🎯 Feedback text that should match audio: "${evalFeedback}"`);
+
                 try {
                     // Stop any playing audio first
                     audioManager.stopAll();
@@ -518,13 +520,22 @@ const GamePlay = () => {
                     setTimeout(() => {
                         const feedbackAudioUrl = `data:audio/mp3;base64,${audio_feedback}`;
                         setFeedbackAudio(feedbackAudioUrl);
+
+                        // Log debug info about the text-audio match
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`🔍 DEBUG - Audio feedback generated for: "${evalFeedback}"`);
+                            console.log(`🔍 DEBUG - Recognized text was: "${recognized_text}"`);
+                            if (response.debug_info) {
+                                console.log("🔍 DEBUG - Additional debug info:", response.debug_info);
+                            }
+                        }
                     }, 100);
                 } catch (err) {
-                    console.error("❌ Erro ao processar áudio de feedback:", err);
+                    console.error("❌ Error processing audio feedback:", err);
                     setFeedbackAudio(null);
                 }
             } else {
-                console.warn("⚠️ Nenhum áudio de feedback recebido da API");
+                console.warn("⚠️ No audio feedback received from API");
                 setFeedbackAudio(null);
             }
 

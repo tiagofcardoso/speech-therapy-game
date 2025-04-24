@@ -1,0 +1,213 @@
+[
+    {
+        "pt_pt": "Cão",
+        "pt_br": "Cachorro",
+        "meaning": "Animal doméstico (canino)."
+    },
+    {
+        "pt_pt": "Frigorífico",
+        "pt_br": "Geladeira",
+        "meaning": "Aparelho para refrigeração de alimentos."
+    },
+    {
+        "pt_pt": "Telemóvel",
+        "pt_br": "Celular",
+        "meaning": "Telefone portátil."
+    },
+    {
+        "pt_pt": "Autocarro",
+        "pt_br": "Ônibus",
+        "meaning": "Veículo de transporte público."
+    },
+    {
+        "pt_pt": "Comboio",
+        "pt_br": "Trem",
+        "meaning": "Meio de transporte sobre trilhos."
+    },
+    {
+        "pt_pt": "Pequeno-almoço",
+        "pt_br": "Café da manhã",
+        "meaning": "Primeira refeição do dia."
+    },
+    {
+        "pt_pt": "Casa de banho",
+        "pt_br": "Banheiro",
+        "meaning": "Local com chuveiro/WC."
+    },
+    {
+        "pt_pt": "Sumo",
+        "pt_br": "Suco",
+        "meaning": "Bebida feita de frutas."
+    },
+    {
+        "pt_pt": "Passeio",
+        "pt_br": "Calçada",
+        "meaning": "Área para pedestres ao lado da rua."
+    },
+    {
+        "pt_pt": "Fila",
+        "pt_br": "Fila",
+        "meaning": "Linha de pessoas esperando."
+    },
+    {
+        "pt_pt": "Apanhar",
+        "pt_br": "Pegar",
+        "meaning": "Coletar ou tomar algo (ex.: apanhar o autocarro)."
+    },
+    {
+        "pt_pt": "Candeeiro",
+        "pt_br": "Abajur/Luminária",
+        "meaning": "Objeto de iluminação decorativa."
+    },
+    {
+        "pt_pt": "Ecrã",
+        "pt_br": "Tela",
+        "meaning": "Superfície de exibição (TV, computador)."
+    },
+    {
+        "pt_pt": "Guarda-redes",
+        "pt_br": "Goleiro",
+        "meaning": "Jogador que defende o gol no futebol."
+    },
+    {
+        "pt_pt": "Camisola",
+        "pt_br": "Camiseta/Suéter",
+        "meaning": "Peça de roupa (em PT pode ser camiseta ou malha)."
+    },
+    {
+        "pt_pt": "Despensa",
+        "pt_br": "Armário/Dispensa",
+        "meaning": "Local para armazenar alimentos."
+    },
+    {
+        "pt_pt": "Fato",
+        "pt_br": "Terno",
+        "meaning": "Roupa formal masculina."
+    },
+    {
+        "pt_pt": "Multa",
+        "pt_br": "Infração",
+        "meaning": "Penalidade por violar regras (ex.: trânsito)."
+    },
+    {
+        "pt_pt": "Giro",
+        "pt_br": "Legal/Maneiro",
+        "meaning": "Algo fixe, interessante (gíria)."
+    },
+    {
+        "pt_pt": "Fixe",
+        "pt_br": "Legal/Cool",
+        "meaning": "Algo bom, agradável (gíria)."
+    },
+    {
+        "pt_pt": "Pão/biju",
+        "pt_br": "Pãozinho/Francês",
+        "meaning": "Tipo de pão pequeno (em PT, \"pão\" é genérico)."
+    },
+    {
+        "pt_pt": "Lanchar",
+        "pt_br": "Tomar lanche",
+        "meaning": "Fazer uma refeição leve à tarde."
+    },
+    {
+        "pt_pt": "Rato",
+        "pt_br": "Mouse",
+        "meaning": "Dispositivo de computador."
+    },
+    {
+        "pt_pt": "Gajo",
+        "pt_br": "Cara",
+        "meaning": "Homem, pessoa (gíria informal)."
+    },
+    {
+        "pt_pt": "Miúdo",
+        "pt_br": "Criança/Menino",
+        "meaning": "Criança ou jovem (gíria)."
+    },
+    {
+        "pt_pt": "Mala",
+        "pt_br": "Mochila",
+        "meaning": "Saco para carregar objetos (em PT, \"mala\" é mais genérico)."
+    },
+    {
+        "pt_pt": "Carteira",
+        "pt_br": "Bolsa",
+        "meaning": "Saco feminino ou carteira de dinheiro."
+    },
+    {
+        "pt_pt": "Chave",
+        "pt_br": "Chave",
+        "meaning": "Em PT, \"chave\" pode ser de fendas (ferramenta); no BR, é mais para fechaduras."
+    },
+    {
+        "pt_pt": "Eléctrico",
+        "pt_br": "Bonde",
+        "meaning": "Tipo de transporte público (ex.: em Lisboa)."
+    },
+    {
+        "pt_pt": "Lancheira",
+        "pt_br": "Marmita",
+        "meaning": "Recipiente para levar comida."
+    },
+    {
+        "pt_pt": "Agrafador",
+        "pt_br": "Grampeador",
+        "meaning": "Ferramenta para juntar papéis."
+    },
+    {
+        "pt_pt": "Fita-cola",
+        "pt_br": "Durex",
+        "meaning": "Fita adesiva transparente."
+    },
+    {
+        "pt_pt": "Escadas rolantes",
+        "pt_br": "Escada rolante",
+        "meaning": "Escadas mecânicas em shoppings ou metrô."
+    },
+    {
+        "pt_pt": "Corta-unhas",
+        "pt_br": "Alicate de unha",
+        "meaning": "Ferramenta para cortar unhas."
+    },
+    {
+        "pt_pt": "Bicicleta",
+        "pt_br": "Bicicleta",
+        "meaning": "Veículo de duas rodas movido a pedal."
+    },
+    {
+        "pt_pt": "Corta-vento",
+        "pt_br": "Jaqueta corta-vento",
+        "meaning": "Roupa leve para proteção contra vento."
+    },
+    {
+        "pt_pt": "Pasta de dentes",
+        "pt_br": "Creme dental",
+        "meaning": "Produto para escovar os dentes."
+    },
+    {
+        "pt_pt": "Corta-unhas",
+        "pt_br": "Alicate de unha",
+        "meaning": "Ferramenta para cortar unhas."
+    },
+    {
+        "pt_pt": "Bicicleta",
+        "pt_br": "Bicicleta",
+        "meaning": "Veículo de duas rodas movido a pedal."
+    },
+    {
+        "pt_pt": "Corta-vento",
+        "pt_br": "Jaqueta corta-vento",
+        "meaning": "Roupa leve para proteção contra vento."
+    },
+    {
+        "pt_pt": "Pasta de dentes",
+        "pt_br": "Creme dental",
+        "meaning": "Produto para escovar os dentes."
+    },
+    {
+        "pt_pt": "Escadas rolantes",
+        "pt_br": "Escada rolante",
+        "meaning": "Escadas mecânicas em shoppings ou metrô."
+    }
+
+]

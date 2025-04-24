@@ -32,8 +32,13 @@ class Message:
         self.tool = tool
         self.params = params
 
+        # Set defaults for common parameters
         if 'language' not in self.params:
             self.params['language'] = 'pt-PT'
+
+        # Support "auto" difficulty for progression-based determination
+        if 'difficulty' in self.params and not self.params['difficulty']:
+            self.params['difficulty'] = 'auto'
 
 
 class ModelContext:
