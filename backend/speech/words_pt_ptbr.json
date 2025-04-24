@@ -208,6 +208,15 @@
         "pt_pt": "Escadas rolantes",
         "pt_br": "Escada rolante",
         "meaning": "Escadas mecânicas em shoppings ou metrô."
+    },
+    {
+        "pt_pt": "Camião",
+        "pt_br": "Caminhão",
+        "meaning": "Veículo de carga grande."
+    },
+    {
+        "pt_pt": "metrô",
+        "pt_br": "métro",
+        "meaning": "Sistema de transporte subterrâneo."
     }
-
 ]

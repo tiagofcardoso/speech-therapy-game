@@ -1,20 +1,57 @@
+"""
+Base agent class with common functionality and enhanced logging.
+"""
 import logging
 import datetime
+import os  # Add the missing import
 from typing import Dict, Any, Optional, List
 from openai import OpenAI
+from utils.agent_logger import get_agent_logger, log_agent_call
 
 
 class BaseAgent:
-    """Base class for all MCP-compatible agents"""
+    """Base class for all agents with standardized logging"""
 
-    def __init__(self, client=None):
-        """Initialize the agent with optional OpenAI client"""
+    def __init__(self, name: str = None, client=None):
+        """Initialize the base agent with logging setup and optional OpenAI client"""
+        # Get class name without 'Agent' suffix
+        if name:
+            self.agent_name = name.upper()
+        else:
+            self.agent_name = self.__class__.__name__.replace(
+                'Agent', '').upper()
+
+        # Set up logger
+        self.logger = get_agent_logger(self.agent_name)
+        self.logger.info(f"Agent initialized")
+
         self.client = client or OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.logger = logging.getLogger(self.__class__.__name__)
 
-    async def initialize(self, context=None):
-        """Async initialization that can be overridden by subclasses"""
-        pass
+    @log_agent_call
+    async def initialize(self, context=None) -> bool:
+        """Initialize agent - to be overridden by subclasses"""
+        self.logger.info(f"Base initialization complete")
+        return True
+
+    def log_action(self, action: str, details: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Log an agent action with standardized formatting
+
+        Args:
+            action: Action being performed
+            details: Optional details to include in the log
+        """
+        if details:
+            detail_str = " - " + \
+                ", ".join(f"{k}={v}" for k, v in details.items())
+        else:
+            detail_str = ""
+
+        self.logger.info(f"{action}{detail_str}")
+
+    def __str__(self) -> str:
+        """String representation of the agent"""
+        return f"{self.agent_name} Agent"
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         """Return list of tool definitions this agent supports"""

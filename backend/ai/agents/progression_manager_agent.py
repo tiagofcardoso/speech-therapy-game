@@ -1,17 +1,33 @@
 from typing import Dict, Any, List
 import logging
+from utils.agent_logger import log_agent_call
+from .base_agent import BaseAgent
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 
-class ProgressionManagerAgent:
+class ProgressionManagerAgent(BaseAgent):
     def __init__(self):
-        self.user_history = {}
-        self.logger = logging.getLogger("ProgressionManagerAgent")
-        self.logger.info("ProgressionManagerAgent initialized")
+        super().__init__(name="PROGRESSION")
+        self.logger.info("Progression Manager agent initialized")
 
+    @log_agent_call
+    async def initialize(self):
+        """Initialize the progression manager agent"""
+        self.logger.info("Initialization complete")
+        return True
+
+    @log_agent_call
     def determine_difficulty(self, user_profile: Dict[str, Any]) -> str:
+        """Determine the appropriate difficulty level for a user"""
+        self.logger.info(f"Determining difficulty for user profile")
+
+        # Log analysis steps
+        if "history" in user_profile and user_profile["history"]:
+            sessions = user_profile["history"].get("completed_sessions", [])
+            self.logger.info(f"Analyzing {len(sessions)} completed sessions")
+
         user_id = user_profile.get('id', 'unknown')
         self.logger.info(
             f"ProgressionManagerAgent.determine_difficulty called by MCP coordinator for user {user_id}")
@@ -53,10 +69,15 @@ class ProgressionManagerAgent:
                         f"User {user_id} average score: {avg_score} from {valid_sessions} recent sessions")
 
                     if avg_score < 60:
-                        return "iniciante"
+                        difficulty = "iniciante"
                     elif avg_score < 85:
-                        return "médio"
-                    return "avançado"
+                        difficulty = "médio"
+                    else:
+                        difficulty = "avançado"
+
+                    self.logger.info(
+                        f"Difficulty determination complete: {difficulty}")
+                    return difficulty
             except Exception as e:
                 self.logger.error(f"Error processing user history: {str(e)}")
                 # Continuar com a determinação baseada na idade em caso de erro
@@ -67,10 +88,14 @@ class ProgressionManagerAgent:
             f"Using age-based difficulty for user {user_id} with age {age}")
 
         if age < 6:
-            return "iniciante"
+            difficulty = "iniciante"
         elif age < 9:
-            return "médio"
-        return "avançado"
+            difficulty = "médio"
+        else:
+            difficulty = "avançado"
+
+        self.logger.info(f"Difficulty determination complete: {difficulty}")
+        return difficulty
 
     def update_user_progress(self, user_id: str, session_data: Dict[str, Any]) -> None:
         """

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from .base_agent import BaseAgent
 from utils.language_utils import get_pt_avoid_examples
+from utils.agent_logger import log_agent_call
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -17,6 +18,7 @@ logging.basicConfig(level=logging.INFO,
 
 class GameDesignerAgent(BaseAgent):
     def __init__(self, client: Optional[AsyncOpenAI] = None):
+        super().__init__(name="GAME_DESIGNER")
         self.client = client or create_async_openai_client()
         self.logger = logging.getLogger(__name__)
         # Load PT-PT/PT-BR language examples when initializing
@@ -24,10 +26,20 @@ class GameDesignerAgent(BaseAgent):
         self.logger.info(
             "Loaded PT-PT/PT-BR language examples for improved prompting")
 
+    @log_agent_call
+    async def initialize(self):
+        """Initialize the agent"""
+        self.logger.info("Initialization complete")
+        return True
+
+    @log_agent_call
     async def create_game(self, user_id: str, difficulty: str = "iniciante",
                           game_type: str = "exercícios de pronúncia",
                           language: str = "pt-PT") -> Dict[str, Any]:
         """Creates a new game for the user using LLM"""
+        self.logger.info(
+            f"Creating game for user {user_id} with difficulty: {difficulty}, type: {game_type}")
+
         try:
             # Criar prompt para o LLM
             prompt = self._create_game_prompt(game_type, difficulty, language)
@@ -62,6 +74,10 @@ O conteúdo DEVE ser:
 
 Formata todos os jogos em JSON limpo e válido, com exercícios claros, instruções detalhadas e feedback construtivo."""
 
+            # Enhanced logging before sending the request
+            self.logger.info(
+                f"Sending request to language model for game creation")
+
             # Obter resposta do modelo usando o cliente async
             completion = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -85,6 +101,10 @@ Formata todos os jogos em JSON limpo e válido, com exercícios claros, instruç
                 "difficulty": difficulty
             })
 
+            # Log game creation success
+            self.logger.info(
+                f"Game created successfully with {len(game_data.get('exercises', []))} exercises")
+
             return game_data
 
         except Exception as e:
@@ -93,6 +113,8 @@ Formata todos os jogos em JSON limpo e válido, com exercícios claros, instruç
 
     def _create_game_prompt(self, game_type: str, difficulty: str, language: str = "pt-PT") -> str:
         """Creates the prompt for game generation"""
+        self.logger.info(
+            f"Creating prompt for game type: {game_type}, difficulty: {difficulty}")
         # Enhance prompt to be more specific about the difficulty level
         difficulty_details = {
             "iniciante": "para crianças ou iniciantes, utilizando palavras simples e sons básicos, fácil de pronunciar",

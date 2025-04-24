@@ -6,6 +6,7 @@ import random
 import datetime
 from openai import OpenAI
 from speech.synthesis import synthesize_speech
+from utils.agent_logger import log_agent_call
 from .base_agent import BaseAgent
 
 # Configuração adequada do logging
@@ -14,9 +15,10 @@ logging.basicConfig(level=logging.INFO,
 
 
 class TutorAgent(BaseAgent):
-    def __init__(self, game_designer=None, client=None):
-        super().__init__(client)
-        self.game_designer = game_designer
+    def __init__(self, game_designer_agent=None, client=None):
+        super().__init__(name="TUTOR")
+        self.game_designer = game_designer_agent
+        self.client = client
         self.logger = logging.getLogger("TutorAgent")
         self.user_sessions = {}
         self.voice_enabled = os.environ.get(
@@ -70,6 +72,34 @@ class TutorAgent(BaseAgent):
 
         self.logger.info(
             f"TutorAgent inicializado com voz {'ativada' if self.voice_enabled else 'desativada'}")
+        self.logger.info(
+            "Tutor agent initialized with game designer reference")
+
+    @log_agent_call
+    async def initialize(self):
+        """Initialize the tutor agent"""
+        self.logger.info("Initialization complete")
+        return True
+
+    @log_agent_call
+    async def create_instructions(self, game_title, game_type, difficulty, persona="friendly"):
+        """Create instructions for a game"""
+        self.logger.info(
+            f"Creating instructions for game: {game_title} ({game_type}, {difficulty})")
+
+        # Log the interaction
+        self.logger.info(f"Generating instructions using persona: {persona}")
+
+        # Original method implementation here
+        # ...
+
+    @log_agent_call
+    async def provide_feedback(self, performance_data, user_info=None):
+        """Provide feedback based on user performance"""
+        self.logger.info(f"Providing feedback based on performance data")
+
+        # Original method implementation here
+        # ...
 
     async def create_instructions(self, user_profile: Dict[str, Any], difficulty: str) -> Dict[str, Any]:
         """Async version of create_instructions"""
